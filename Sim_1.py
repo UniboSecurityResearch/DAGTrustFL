@@ -10,10 +10,29 @@ import os
 from PIL import Image
 
 def draw_dag(dag, step, pos, folder="frames"):
-    plt.figure(figsize=(10, 7))
-    nx.draw(dag.graph, pos, with_labels=False, node_size=300, node_color="skyblue", edge_color="gray", arrows=True)
-    labels = {n: n[:4] for n in dag.graph.nodes()}
-    nx.draw_networkx_labels(dag.graph, pos, labels, font_size=6)
+    plt.figure(figsize=(13, 7))
+    # Colori dei nodi in base alla conferma
+    node_colors = []
+    for node_id in dag.graph.nodes:
+        cw = dag.nodes[node_id].cw
+        if dag.is_confirmed(node_id):
+            node_colors.append("royalblue")  # blu scuro per confermati
+        else:
+            node_colors.append("skyblue")    # azzurro per non confermati
+    nx.draw(
+        dag.graph,
+        pos,
+        with_labels=False,
+        node_size=1200,  # dimensione più grande per maggiore visibilità
+        node_color=node_colors,
+        edge_color="gray",
+        arrows=True
+    )
+    # Etichette leggibili (ID abbreviato + CW)
+    labels = {
+        n: f"{n[:4]}\nCW={dag.nodes[n].cw}" for n in dag.graph.nodes
+    }
+    nx.draw_networkx_labels(dag.graph, pos, labels, font_size=8, font_weight="bold")
     plt.title(f"DAG Evolution - Step {step}")
     plt.axis("off")
     os.makedirs(folder, exist_ok=True)
@@ -59,12 +78,9 @@ for _ in range(5):
         draw_dag(dag, step=step, pos=pos)
         step += 1
 
-print(f"Numero totale di nodi: {len(dag.nodes)}")
-print(f"Numero di tip attuali: {len(dag.tips)}")
-
 # Mostra la matrice di un nodo specifico
 sample_id = added_node_ids[7]
-print(f"\nMatrice del nodo {sample_id[:8]}:\n{dag.get_node_data(sample_id)}")
+print(f"\nMatrice del nodo {sample_id[:9]}:\n{dag.get_node_data(sample_id)}")
 
 print(f"Totale nodi: {len(dag.nodes)} - Totale tips: {len(dag.tips)}")
 make_gif()

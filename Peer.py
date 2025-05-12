@@ -14,6 +14,14 @@ class Peer:
     def add_node(self):
         data_matrix = self.generate_data_matrix()
         new_node = DAGNode.DAGNode(data_matrix)
-        selected_tips = self.selector.select_tips(self.dag)
-        self.dag.add_node(new_node, selected_tips)
+        selected_parents = self.selector.select_tips_relaxed(self.dag)
+
+        # Logging info
+        print(f"\n[{self.name}] Adding node {new_node.id[:6]}")
+        for pid in selected_parents:
+            cw = self.dag.nodes[pid].cw
+            status = "(CONFIRMED)" if self.dag.is_confirmed(pid) else ""
+            print(f"  ↳ parent {pid[:6]} | CW={cw} {status}")
+
+        self.dag.add_node(new_node, selected_parents)
         return new_node.id

@@ -23,4 +23,19 @@ class DAG:
     def get_node_data(self, node_id):
         node = self.nodes.get(node_id)
         return node.data if node else None
+    
+    def update_cumulative_weights(self):
+        # Reset CW
+        for node in self.nodes.values():
+            node.cw = 1
+
+        # Calcola approvazioni indirette usando DFS inversa
+        for node_id in self.graph.nodes:
+            descendants = nx.descendants(self.graph.reverse(copy=False), node_id)
+            self.nodes[node_id].cw += len(descendants) +1
+    
+    def is_confirmed(self, node_id, threshold=4):
+        return self.nodes[node_id].cw > threshold
+    
+
 
