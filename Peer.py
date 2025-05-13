@@ -14,7 +14,7 @@ class Peer:
     def add_node(self):
         data_matrix = self.generate_data_matrix()
         new_node = DAGNode.DAGNode(data_matrix)
-        selected_parents = self.selector.select_tips_relaxed(self.dag)
+        selected_parents = self.selector.select_tips(self.dag, data_matrix)
 
         # Logging info
         print(f"\n[{self.name}] Adding node {new_node.id[:6]}")

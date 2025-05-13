@@ -14,25 +14,37 @@ def draw_dag(dag, step, pos, folder="frames"):
     # Colori dei nodi in base alla conferma
     node_colors = []
     for node_id in dag.graph.nodes:
-        cw = dag.nodes[node_id].cw
         if dag.is_confirmed(node_id):
-            node_colors.append("royalblue")  # blu scuro per confermati
+            node_colors.append("royalblue")  # Blu scuro per confermati
         else:
-            node_colors.append("skyblue")    # azzurro per non confermati
+            node_colors.append("skyblue")    # Azzurro per non confermati
+
+    # Disegna nodi e archi
     nx.draw(
         dag.graph,
         pos,
         with_labels=False,
-        node_size=1200,  # dimensione più grande per maggiore visibilità
+        node_size=2000,
         node_color=node_colors,
         edge_color="gray",
         arrows=True
     )
-    # Etichette leggibili (ID abbreviato + CW)
-    labels = {
-        n: f"{n[:4]}\nCW={dag.nodes[n].cw}" for n in dag.graph.nodes
-    }
-    nx.draw_networkx_labels(dag.graph, pos, labels, font_size=8, font_weight="bold")
+    # Etichette: ID abbreviato + CW + media matrice, in grassetto
+    labels = {}
+    for node_id in dag.graph.nodes:
+        node = dag.nodes[node_id]
+        matrix_mean = np.mean(node.data)
+        labels[node_id] = f"{node_id[:4]}\nCW={node.cw}\nμ={matrix_mean:.2f}"
+
+    
+    nx.draw_networkx_labels(
+        dag.graph,
+        pos,
+        labels=labels,
+        font_size=12,
+        font_weight="bold"
+    )
+
     plt.title(f"DAG Evolution - Step {step}")
     plt.axis("off")
     os.makedirs(folder, exist_ok=True)
@@ -56,7 +68,7 @@ matplotlib.use('Qt5Agg')
 # Simulazione di un DAG con 5 peer e 25 nodi
 # Inizializza il DAG e il selettore di tip
 dag = DAG.DAG()
-selector = TipSelectionAlgorithm.IOTALikeTipSelector()
+selector = TipSelectionAlgorithm.MyCustomTipSelector()
 
 # Crea 5 peer
 peers = [Peer.Peer(dag, selector, name=f"Peer{i}") for i in range(5)]
@@ -84,3 +96,5 @@ print(f"\nMatrice del nodo {sample_id[:9]}:\n{dag.get_node_data(sample_id)}")
 
 print(f"Totale nodi: {len(dag.nodes)} - Totale tips: {len(dag.tips)}")
 make_gif()
+
+#CREATING MILESTONE AT THE ENF OF EVERY FL ROUND??

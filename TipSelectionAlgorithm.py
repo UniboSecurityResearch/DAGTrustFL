@@ -17,8 +17,8 @@ class RandomTipSelector(TipSelectionAlgorithm):
             return []
         
 class IOTALikeTipSelector:
-    def select_tips(self, dag: DAG) -> list:
-        dag.update_cumulative_weights()
+    def select_tips_old(self, dag: DAG) -> list:
+        
         tips = dag.get_tips()
         unconfirmed = [t for t in tips if not dag.is_confirmed(t)]
 
@@ -40,8 +40,8 @@ class IOTALikeTipSelector:
             else:
                 return [all_nodes[0], all_nodes[0]]  # fallback sicuro
             
-            
-    def select_tips_relaxed(self, dag: DAG) -> list:
+
+    def select_tips(self, dag: DAG) -> list:
         dag.update_cumulative_weights()
         
         # Considera tutti i nodi del DAG non ancora confermati (CW <= 3)
@@ -66,6 +66,83 @@ class IOTALikeTipSelector:
 
         
 class MyCustomTipSelector(TipSelectionAlgorithm):
-    def select_tips(self, dag: DAG) -> list:
-            """TODO"""
-            raise NotImplementedError
+
+    def __init__(self, max_depth=3, similarity_threshold=0.5):
+        self.max_depth = max_depth
+        self.similarity_threshold = similarity_threshold
+
+    # Cosine similarity between two matrices
+    def cosine_similarity(self, m1, m2):
+        v1 = m1.flatten()
+        v2 = m2.flatten()
+        return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+
+    # Evaluate similarity score recursively up to a maximum depth
+    def evaluate_similarity(self, node_id, dag: DAG, new_matrix):
+        visited = set()
+        queue = [(node_id, 0)]
+        similarities = []
+
+        while queue:
+            current, depth = queue.pop(0)
+            if current in visited or depth > self.max_depth:
+                continue
+            visited.add(current)
+
+            current_matrix = dag.nodes[current].data
+            sim = self.cosine_similarity(new_matrix, current_matrix)
+            similarities.append((1 / (1 + depth)) * sim)
+
+            for parent in dag.graph.successors(current):
+                queue.append((parent, depth + 1))
+        #print(sum(similarities)/len(similarities))
+        return sum(similarities) / len(similarities) if similarities else None
+
+    def select_tips(self, dag: DAG, new_matrix) -> list:
+        # Step 1: trova tutti i tip 
+        dag.update_cumulative_weights()
+        candidate_tips = [
+            n for n in dag.graph.nodes
+            if dag.graph.in_degree(n) == 0 and not dag.is_confirmed(n)
+        ]
+
+        # Step 2: calcola similarità (compresi genitori) per ogni tip
+        scored = []
+        for tip in candidate_tips:
+            score = self.evaluate_similarity(tip, dag, new_matrix)
+            if score is not None and score >= self.similarity_threshold:
+                scored.append((tip, score))
+
+        # Ordina per score decrescente
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        # Step 3: prendi fino a 2 tip "buoni"
+        selected = [tip for tip, _ in scored[:2]]
+        print(scored)
+        ## Step 4: se meno di 2, aggiungi fallback da nodi confermati con CW > 3
+        if len(selected) < 2:
+            confirmed_nodes = [
+                n for n in dag.graph.nodes
+                if dag.is_confirmed(n) and n not in selected
+            ]
+            # Filtra i nodi confermati per quelli che sono simili
+            confirmed_scores = []
+            for node in confirmed_nodes:
+                score = self.evaluate_similarity(node, dag, new_matrix)
+                if score is not None and score >= self.similarity_threshold:
+                    confirmed_scores.append((node, score))
+
+            confirmed_scores.sort(key=lambda x: x[1], reverse=True)
+
+            # Aggiungi i nodi confermati simili
+            selected += [node for node, _ in confirmed_scores[:2 - len(selected)]]
+
+        # Step 5: se ancora meno di 2, prendi qualsiasi altro nodo confermato come fallback finale
+        if len(selected) < 2:
+            backup_nodes = [n for n in dag.graph.nodes]
+            random.shuffle(backup_nodes)
+            selected += backup_nodes[:2 - len(selected)]
+
+
+        # Ultimo controllo di sicurezza
+        return selected[:2]
