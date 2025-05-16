@@ -8,8 +8,16 @@ import Peer
 import TipSelectionAlgorithm
 import os
 from PIL import Image
+import shutil
 
 def draw_dag(dag, step, pos, folder="frames"):
+    # Rimuovi i file vecchi dalla cartella frames
+    if step == 0:  # Solo al primo step
+        if os.path.exists(folder):
+            shutil.rmtree(folder)
+        os.makedirs(folder, exist_ok=True)
+
+    dag.update_cumulative_weights()  # Aggiorna i pesi cumulativi
     plt.figure(figsize=(13, 7))
     # Colori dei nodi in base alla conferma e alla malevolenza
     node_colors = []
@@ -49,7 +57,6 @@ def draw_dag(dag, step, pos, folder="frames"):
 
     plt.title(f"DAG Evolution - Step {step}")
     plt.axis("off")
-    os.makedirs(folder, exist_ok=True)
     plt.savefig(f"{folder}/frame_{step:03d}.png")
     plt.close()
 
@@ -76,7 +83,7 @@ dag = DAG.DAG()
 selector = TipSelectionAlgorithm.MyCustomTipSelector()
 
 # Crea 5 peer
-peers = [Peer.Peer(dag, selector, name=f"Peer{i}") for i in range(5)]
+peers = [Peer.Peer(dag, selector, name=f"Peer{i}") for i in range(8)]
 
 # Nodo iniziale
 genesis = DAGNode.DAGNode(np.zeros((3, 3)))
@@ -89,7 +96,7 @@ step = 1
 added_node_ids = []
 malicious_peer = peers[3]  # Definiamo il terzo peer come malevolo
 
-for _ in range(2):
+for _ in range(3):
     for peer in peers:
         if peer == malicious_peer:
             # Genera una matrice malevola con valori molto alti

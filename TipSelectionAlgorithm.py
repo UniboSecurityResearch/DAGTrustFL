@@ -67,7 +67,7 @@ class IOTALikeTipSelector:
         
 class MyCustomTipSelector(TipSelectionAlgorithm):
 
-    def __init__(self, max_depth=4, similarity_threshold=0.25, cw_penalty_factor=0.2):
+    def __init__(self, max_depth=4, similarity_threshold=0.4, cw_penalty_factor=0.05):
         self.max_depth = max_depth
         self.similarity_threshold = similarity_threshold
         self.cw_penalty_factor = cw_penalty_factor  # Factor to penalize high CW nodes
@@ -131,7 +131,7 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
         dag.update_cumulative_weights()
         candidate_tips = [
             n for n in dag.graph.nodes
-            if dag.graph.in_degree(n) == 0 and not dag.is_confirmed(n)
+            if not dag.is_confirmed(n)
         ]
         #print(f"Candidate tips: {candidate_tips}")
 

@@ -13,11 +13,11 @@ class Peer:
         selected_parents = self.selector.select_tips(self.dag, new_node.data)
 
         # Logging info
-        print(f"\n[{self.name}] Adding node {new_node.id[:6]}")
+        print(f"[{self.name}] Adding node {new_node.id[:6]}")
         for pid in selected_parents:
             cw = self.dag.nodes[pid].cw
             status = "(CONFIRMED)" if self.dag.is_confirmed(pid) else ""
             print(f"  ↳ parent {pid[:6]} | CW={cw} {status}")
-
+        print()
         self.dag.add_node(new_node, selected_parents)
         return new_node.id

@@ -32,10 +32,10 @@ class DAG:
         # Calcola approvazioni indirette usando DFS inversa
         for node_id in self.graph.nodes:
             descendants = nx.descendants(self.graph.reverse(copy=False), node_id)
-            self.nodes[node_id].cw += len(descendants) +1
+            self.nodes[node_id].cw += len(descendants)  # Rimosso il +1
     
-    def is_confirmed(self, node_id, threshold=5):
+    def is_confirmed(self, node_id, threshold=3):
         return self.nodes[node_id].cw > threshold
-    
+
 
 
