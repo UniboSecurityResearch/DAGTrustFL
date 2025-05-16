@@ -44,7 +44,7 @@ class IOTALikeTipSelector:
     def select_tips(self, dag: DAG) -> list:
         dag.update_cumulative_weights()
         
-        # Considera tutti i nodi del DAG non ancora confermati (CW <= 3)
+        # Considera tutti i nodi del DAG non ancora confermati (CW <= threshold)
         unconfirmed = [n for n in dag.graph.nodes if not dag.is_confirmed(n)]
 
         if len(unconfirmed) >= 2:
@@ -67,9 +67,10 @@ class IOTALikeTipSelector:
         
 class MyCustomTipSelector(TipSelectionAlgorithm):
 
-    def __init__(self, max_depth=3, similarity_threshold=0.3):
+    def __init__(self, max_depth=4, similarity_threshold=0.25, cw_penalty_factor=0.2):
         self.max_depth = max_depth
         self.similarity_threshold = similarity_threshold
+        self.cw_penalty_factor = cw_penalty_factor  # Factor to penalize high CW nodes
 
     # Cosine similarity between two matrices - consider also magnitude!
     def cosine_similarity(self, m1, m2):
@@ -95,7 +96,8 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
     def evaluate_similarity(self, node_id, dag: DAG, new_matrix):
         visited = set()
         queue = [(node_id, 0)]
-        similarities = []
+        weighted_similarities = []
+        total_weights = 0
 
         while queue:
             current, depth = queue.pop(0)
@@ -106,18 +108,23 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
             current_matrix = dag.nodes[current].data
             sim = self.cosine_similarity(new_matrix, current_matrix)
             
-            # Aggiungi solo valori validi
+            # Penalize nodes with high CW
+            cw_penalty = 1 / (1 + self.cw_penalty_factor * dag.nodes[current].cw)
+            
             if not np.isnan(sim):
-                # Applica un peso maggiore al nodo corrente rispetto ai genitori
                 weight = 2.0 if depth == 0 else (1 / (1 + depth**2))
-                similarities.append(weight * sim)
+                weighted_similarity = weight * sim * cw_penalty
+                weighted_similarities.append(weighted_similarity)
+                total_weights += weight
+            else:
+                print(f"Similarity is NaN for node {current} at depth {depth}")
 
             for parent in dag.graph.successors(current):
-                print(f"Current node: {current}, Parent (successor?): {parent}")
+                #print(f"Current node: {current}, Parent (successor?): {parent}")
                 queue.append((parent, depth + 1))
         
-        # Calcola la media delle similarità pesate solo se ci sono valori validi
-        return sum(similarities) / len(similarities) if similarities else 0
+        # Calculate the weighted average similarity
+        return sum(weighted_similarities) / total_weights if total_weights > 0 else 0
 
     def select_tips(self, dag: DAG, new_matrix) -> list:
         # Step 1: trova tutti i tip 
@@ -138,12 +145,11 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
 
         # Ordina per score decrescente
         scored.sort(key=lambda x: x[1], reverse=True)
-       # print(scored)
 
         # Step 3: seleziona i migliori nodi non confermati
         selected = [tip for tip, _ in scored if _ >= self.similarity_threshold][:2]
         print(selected)
-        # Step 4: se meno di 2, aggiungi fallback da nodi confermati con CW > 3
+        # Step 4: se meno di 2, aggiungi fallback da nodi confermati con CW > threshold
         if len(selected) < 2:
             confirmed_nodes = [
                 n for n in dag.graph.nodes
@@ -157,7 +163,7 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
                     confirmed_scores.append((node, score))
 
             confirmed_scores.sort(key=lambda x: x[1], reverse=True)
-
+            print(f"Confirmed nodes: {confirmed_scores}")
             # Aggiungi i nodi confermati simili
             selected += [node for node, _ in confirmed_scores[:2 - len(selected)]]
 
