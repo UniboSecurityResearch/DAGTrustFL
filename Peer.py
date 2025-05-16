@@ -8,13 +8,9 @@ class Peer:
         self.selector = selector
         self.name = name
 
-    def generate_data_matrix(self, size=(3, 3)):
-        return np.random.rand(*size)
 
-    def add_node(self):
-        data_matrix = self.generate_data_matrix()
-        new_node = DAGNode.DAGNode(data_matrix)
-        selected_parents = self.selector.select_tips(self.dag, data_matrix)
+    def add_node(self,new_node):
+        selected_parents = self.selector.select_tips(self.dag, new_node.data)
 
         # Logging info
         print(f"\n[{self.name}] Adding node {new_node.id[:6]}")

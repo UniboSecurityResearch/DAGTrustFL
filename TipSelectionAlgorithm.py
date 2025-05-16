@@ -67,15 +67,29 @@ class IOTALikeTipSelector:
         
 class MyCustomTipSelector(TipSelectionAlgorithm):
 
-    def __init__(self, max_depth=3, similarity_threshold=0.5):
+    def __init__(self, max_depth=3, similarity_threshold=0.3):
         self.max_depth = max_depth
         self.similarity_threshold = similarity_threshold
 
-    # Cosine similarity between two matrices
+    # Cosine similarity between two matrices - consider also magnitude!
     def cosine_similarity(self, m1, m2):
         v1 = m1.flatten()
         v2 = m2.flatten()
-        return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+        norm_v1 = np.linalg.norm(v1)
+        norm_v2 = np.linalg.norm(v2)
+        
+        # Controlla se una delle norme è zero per evitare divisioni per zero
+        if norm_v1 == 0 or norm_v2 == 0:
+            return 0  # Similarità nulla se uno dei vettori è nullo
+        
+        # Similarità coseno
+        cosine_sim = np.dot(v1, v2) / (norm_v1 * norm_v2)
+        
+        # Penalizza le differenze di magnitudine
+        magnitude_penalty = 1 - abs(norm_v1 - norm_v2) / max(norm_v1, norm_v2)
+        
+        # Restituisci una combinazione di similarità coseno e penalità di magnitudine
+        return cosine_sim * magnitude_penalty
 
     # Evaluate similarity score recursively up to a maximum depth
     def evaluate_similarity(self, node_id, dag: DAG, new_matrix):
@@ -91,12 +105,19 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
 
             current_matrix = dag.nodes[current].data
             sim = self.cosine_similarity(new_matrix, current_matrix)
-            similarities.append((1 / (1 + depth)) * sim)
+            
+            # Aggiungi solo valori validi
+            if not np.isnan(sim):
+                # Applica un peso maggiore al nodo corrente rispetto ai genitori
+                weight = 2.0 if depth == 0 else (1 / (1 + depth**2))
+                similarities.append(weight * sim)
 
             for parent in dag.graph.successors(current):
+                print(f"Current node: {current}, Parent (successor?): {parent}")
                 queue.append((parent, depth + 1))
-        #print(sum(similarities)/len(similarities))
-        return sum(similarities) / len(similarities) if similarities else None
+        
+        # Calcola la media delle similarità pesate solo se ci sono valori validi
+        return sum(similarities) / len(similarities) if similarities else 0
 
     def select_tips(self, dag: DAG, new_matrix) -> list:
         # Step 1: trova tutti i tip 
@@ -105,21 +126,24 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
             n for n in dag.graph.nodes
             if dag.graph.in_degree(n) == 0 and not dag.is_confirmed(n)
         ]
+        #print(f"Candidate tips: {candidate_tips}")
 
         # Step 2: calcola similarità (compresi genitori) per ogni tip
         scored = []
         for tip in candidate_tips:
             score = self.evaluate_similarity(tip, dag, new_matrix)
-            if score is not None and score >= self.similarity_threshold:
+            print(f"Tip: {tip}, Score: {score}")
+            if score is not None:
                 scored.append((tip, score))
 
         # Ordina per score decrescente
         scored.sort(key=lambda x: x[1], reverse=True)
+       # print(scored)
 
-        # Step 3: prendi fino a 2 tip "buoni"
-        selected = [tip for tip, _ in scored[:2]]
-        print(scored)
-        ## Step 4: se meno di 2, aggiungi fallback da nodi confermati con CW > 3
+        # Step 3: seleziona i migliori nodi non confermati
+        selected = [tip for tip, _ in scored if _ >= self.similarity_threshold][:2]
+        print(selected)
+        # Step 4: se meno di 2, aggiungi fallback da nodi confermati con CW > 3
         if len(selected) < 2:
             confirmed_nodes = [
                 n for n in dag.graph.nodes
@@ -129,7 +153,7 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
             confirmed_scores = []
             for node in confirmed_nodes:
                 score = self.evaluate_similarity(node, dag, new_matrix)
-                if score is not None and score >= self.similarity_threshold:
+                if score is not None:
                     confirmed_scores.append((node, score))
 
             confirmed_scores.sort(key=lambda x: x[1], reverse=True)
@@ -137,12 +161,11 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
             # Aggiungi i nodi confermati simili
             selected += [node for node, _ in confirmed_scores[:2 - len(selected)]]
 
-        # Step 5: se ancora meno di 2, prendi qualsiasi altro nodo confermato come fallback finale
+        # Step 5: se ancora meno di 2, prendi qualsiasi altro nodo come fallback finale
         if len(selected) < 2:
-            backup_nodes = [n for n in dag.graph.nodes]
+            backup_nodes = [n for n in dag.graph.nodes if n not in selected]
             random.shuffle(backup_nodes)
             selected += backup_nodes[:2 - len(selected)]
-
 
         # Ultimo controllo di sicurezza
         return selected[:2]

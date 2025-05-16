@@ -11,10 +11,13 @@ from PIL import Image
 
 def draw_dag(dag, step, pos, folder="frames"):
     plt.figure(figsize=(13, 7))
-    # Colori dei nodi in base alla conferma
+    # Colori dei nodi in base alla conferma e alla malevolenza
     node_colors = []
     for node_id in dag.graph.nodes:
-        if dag.is_confirmed(node_id):
+        node = dag.nodes[node_id]
+        if getattr(node, "malicious", False):  # Controlla se il nodo è malevolo
+            node_colors.append("red")  # Rosso per nodi malevoli
+        elif dag.is_confirmed(node_id):
             node_colors.append("royalblue")  # Blu scuro per confermati
         else:
             node_colors.append("skyblue")    # Azzurro per non confermati
@@ -36,7 +39,6 @@ def draw_dag(dag, step, pos, folder="frames"):
         matrix_mean = np.mean(node.data)
         labels[node_id] = f"{node_id[:4]}\nCW={node.cw}\nμ={matrix_mean:.2f}"
 
-    
     nx.draw_networkx_labels(
         dag.graph,
         pos,
@@ -63,6 +65,9 @@ def make_gif(frame_folder="frames", output_gif="dag_evolution.gif", duration=100
         images[0].save(output_gif, save_all=True, append_images=images[1:], duration=duration, loop=0)
         print(f"GIF salvata come {output_gif}")
 
+def generate_data_matrix(size=(3, 3)):
+    return np.random.rand(*size)
+
 matplotlib.use('Qt5Agg')
 
 # Simulazione di un DAG con 5 peer e 25 nodi
@@ -80,11 +85,23 @@ pos = nx.spring_layout(dag.graph, seed=42)  # layout iniziale
 draw_dag(dag, step=0, pos=pos)
 
 # Ogni peer aggiunge 5 nodi (25 totali)
-step=1
+step = 1
 added_node_ids = []
-for _ in range(5):
+malicious_peer = peers[3]  # Definiamo il terzo peer come malevolo
+
+for _ in range(2):
     for peer in peers:
-        node_id = peer.add_node()
+        if peer == malicious_peer:
+            # Genera una matrice malevola con valori molto alti
+            data_matrix = np.random.rand(3, 3) * 100
+            node = DAGNode.DAGNode(data_matrix)
+            node.malicious = True  # Marca il nodo come malevolo
+        else:
+            # Genera una matrice normale
+            data_matrix = generate_data_matrix()
+            node = DAGNode.DAGNode(data_matrix)
+        
+        node_id = peer.add_node(node)
         added_node_ids.append(node_id)
         pos = nx.spring_layout(dag.graph, seed=42, pos=pos, fixed=list(pos.keys()))
         draw_dag(dag, step=step, pos=pos)
