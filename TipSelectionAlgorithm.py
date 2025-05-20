@@ -63,7 +63,6 @@ class IOTALikeTipSelector:
                 return random.sample(all_nodes, 2)
             else:
                 return [all_nodes[0], all_nodes[0]]
-
         
 class MyCustomTipSelector(TipSelectionAlgorithm):
 
