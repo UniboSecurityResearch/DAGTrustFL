@@ -3,10 +3,11 @@ import DAGNode
 import numpy as np
 import TipSelectionAlgorithm
 class Peer:
-    def __init__(self, dag: DAG, selector: TipSelectionAlgorithm, name="Peer"):
+    def __init__(self, dag: DAG, selector: TipSelectionAlgorithm, name="Peer", malicious=False):
         self.dag = dag
         self.selector = selector
         self.name = name
+        self.malicious = malicious
 
 
     def add_node(self,new_node):

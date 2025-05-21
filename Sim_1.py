@@ -61,7 +61,7 @@ def draw_dag(dag, step, pos, folder="frames"):
     plt.close()
 
 # ======== GIF Generation ========
-def make_gif(frame_folder="frames", output_gif="dag_evolution.gif", duration=1000):
+def make_gif(frame_folder="frames", output_gif="dag_evolution.gif", duration=900):
     images = []
     frame_files = sorted([f for f in os.listdir(frame_folder) if f.endswith(".png")])
     for filename in frame_files:
@@ -77,13 +77,23 @@ def generate_data_matrix(size=(3, 3)):
 
 matplotlib.use('Qt5Agg')
 
-# Simulazione di un DAG con 5 peer e 25 nodi
+# Simulazione di un DAG con X peer, cada uno fa Y nodi
+X= 10  # Numero di peer
+Y= 5   # Numero di nodi per peer
+malicious_percentage = 0.4  # Imposta la percentuale di peer malevoli (es: 0.4 = 40%)
+
 # Inizializza il DAG e il selettore di tip
 dag = DAG.DAG()
 selector = TipSelectionAlgorithm.MyCustomTipSelector()
 
-# Crea 5 peer
-peers = [Peer.Peer(dag, selector, name=f"Peer{i}") for i in range(8)]
+# Crea X peer
+peers = [Peer.Peer(dag, selector, name=f"Peer{i}") for i in range(X)]
+
+# Seleziona casualmente i peer malevoli in base alla percentuale
+num_malicious = int(X * malicious_percentage)
+malicious_indices = np.random.choice(X, num_malicious, replace=False)
+for idx in malicious_indices:
+    peers[idx].malicious = True
 
 # Nodo iniziale
 genesis = DAGNode.DAGNode(np.zeros((3, 3)))
@@ -91,14 +101,13 @@ dag.add_node(genesis, [])
 pos = nx.spring_layout(dag.graph, seed=42)  # layout iniziale
 draw_dag(dag, step=0, pos=pos)
 
-# Ogni peer aggiunge 5 nodi (25 totali)
+# Ogni peer aggiunge Y nodi
 step = 1
 added_node_ids = []
-malicious_peer = peers[3]  # Definiamo il terzo peer come malevolo
 
-for _ in range(3):
+for _ in range(Y):
     for peer in peers:
-        if peer == malicious_peer:
+        if getattr(peer, "malicious", False):
             # Genera una matrice malevola con valori molto alti
             data_matrix = np.random.rand(3, 3) * 100
             node = DAGNode.DAGNode(data_matrix)
@@ -115,8 +124,8 @@ for _ in range(3):
         step += 1
 
 # Mostra la matrice di un nodo specifico
-sample_id = added_node_ids[7]
-print(f"\nMatrice del nodo {sample_id[:9]}:\n{dag.get_node_data(sample_id)}")
+#sample_id = added_node_ids[7]
+#print(f"\nMatrice del nodo {sample_id[:9]}:\n{dag.get_node_data(sample_id)}")
 
 print(f"Totale nodi: {len(dag.nodes)} - Totale tips: {len(dag.tips)}")
 make_gif()
