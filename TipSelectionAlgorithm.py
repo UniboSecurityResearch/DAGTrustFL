@@ -6,6 +6,7 @@ class TipSelectionAlgorithm:
         """To be implemented by specific algorithms."""
         raise NotImplementedError
 
+
 class RandomTipSelector(TipSelectionAlgorithm):
     def select_tips(self, dag: DAG) -> list:
         tips = dag.get_tips()
@@ -16,14 +17,12 @@ class RandomTipSelector(TipSelectionAlgorithm):
         else:
             return []
         
+
 class IOTALikeTipSelector:
     def select_tips_old(self, dag: DAG) -> list:
-        
         tips = dag.get_tips()
         unconfirmed = [t for t in tips if not dag.is_confirmed(t)]
-
         all_nodes = list(dag.graph.nodes())
-
         if len(unconfirmed) >= 2:
             return random.sample(unconfirmed, 2)
         elif len(unconfirmed) == 1:
@@ -43,10 +42,8 @@ class IOTALikeTipSelector:
 
     def select_tips(self, dag: DAG) -> list:
         dag.update_cumulative_weights()
-        
         # Considera tutti i nodi del DAG non ancora confermati (CW <= threshold)
         unconfirmed = [n for n in dag.graph.nodes if not dag.is_confirmed(n)]
-
         if len(unconfirmed) >= 2:
             return random.sample(unconfirmed, 2)
         elif len(unconfirmed) == 1:
@@ -63,6 +60,8 @@ class IOTALikeTipSelector:
                 return random.sample(all_nodes, 2)
             else:
                 return [all_nodes[0], all_nodes[0]]
+            
+            
         
 class MyCustomTipSelector(TipSelectionAlgorithm):
 
@@ -72,24 +71,23 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
         self.cw_penalty_factor = cw_penalty_factor  # Factor to penalize high CW nodes
 
     # Cosine similarity between two matrices - consider also magnitude!
+    # This methods is used in Zhu et Al. (2024) 
     def cosine_similarity(self, m1, m2):
         v1 = m1.flatten()
         v2 = m2.flatten()
         norm_v1 = np.linalg.norm(v1)
         norm_v2 = np.linalg.norm(v2)
-        
         # Controlla se una delle norme è zero per evitare divisioni per zero
         if norm_v1 == 0 or norm_v2 == 0:
             return 0  # Similarità nulla se uno dei vettori è nullo
-        
         # Similarità coseno
         cosine_sim = np.dot(v1, v2) / (norm_v1 * norm_v2)
-        
         # Penalizza le differenze di magnitudine
         magnitude_penalty = 1 - abs(norm_v1 - norm_v2) / max(norm_v1, norm_v2)
-        
         # Restituisci una combinazione di similarità coseno e penalità di magnitudine
         return cosine_sim * magnitude_penalty
+    
+    
 
     # Evaluate similarity score recursively up to a maximum depth
     def evaluate_similarity(self, node_id, dag: DAG, new_matrix):
@@ -103,13 +101,13 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
             if current in visited or depth > self.max_depth:
                 continue
             visited.add(current)
-
             current_matrix = dag.nodes[current].data
+
+            #Calculating similarity between the new matrix and the current node's matrix
             sim = self.cosine_similarity(new_matrix, current_matrix)
             
             # Penalize nodes with high CW
             cw_penalty = 1 / (1 + self.cw_penalty_factor * dag.nodes[current].cw)
-            
             if not np.isnan(sim):
                 weight = 2.0 if depth == 0 else (1 / (1 + depth**2))
                 weighted_similarity = weight * sim * cw_penalty
@@ -117,16 +115,14 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
                 total_weights += weight
             else:
                 print(f"Similarity is NaN for node {current} at depth {depth}")
-
             for parent in dag.graph.successors(current):
                 #print(f"Current node: {current}, Parent (successor?): {parent}")
                 queue.append((parent, depth + 1))
-        
         # Calculate the weighted average similarity
         return sum(weighted_similarities) / total_weights if total_weights > 0 else 0
 
     def select_tips(self, dag: DAG, new_matrix) -> list:
-        # Step 1: trova tutti i tip 
+        # Step 1: trova tutti i tip (CW < threshold)
         dag.update_cumulative_weights()
         candidate_tips = [
             n for n in dag.graph.nodes
