@@ -3,15 +3,16 @@ import DAGNode
 import numpy as np
 import TipSelectionAlgorithm
 class Peer:
-    def __init__(self, dag: DAG, selector: TipSelectionAlgorithm, name="Peer", malicious=False):
+    def __init__(self, dag: DAG, selector: TipSelectionAlgorithm, name="Peer", malicious=False, corrupted=False):
         self.dag = dag
         self.selector = selector
         self.name = name
         self.malicious = malicious
+        self.corrupted = corrupted
 
 
     def add_node(self,new_node):
-        selected_parents = self.selector.select_tips(self.dag, new_node.data)
+        selected_parents = self.selector.select_tips(self.dag, new_node.data, corrupted=self.corrupted)
 
         # Logging info
         print(f"[{self.name}] Adding node {new_node.id[:6]}")

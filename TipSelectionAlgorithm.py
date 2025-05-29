@@ -115,7 +115,8 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
         # Calculate the weighted average similarity
         return sum(weighted_similarities) / total_weights if total_weights > 0 else 0
 
-    def select_tips(self, dag: DAG, new_matrix) -> list:
+    def select_tips(self, dag: DAG, new_matrix, corrupted=False) -> list:
+        #TODO: Implement the corrupted behavior
         # Step 1: find all tips (CW < threshold)
         dag.update_cumulative_weights()
         candidate_tips = [
