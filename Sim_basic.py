@@ -83,28 +83,42 @@ def generate_data_matrix(size=(3, 3), malicious=False):
 
 def search_path_from_tip_to_lastroundFL(dag, tip, genesis_id):
     """
-    Recursively traverses all paths from the tip to the given genesis_id and returns a set of all nodes involved.
-    If genesis_id is not reachable from tip, the function will not loop infinitely.
+    Efficiently traverses all paths from the tip to the given genesis_id and returns a set of all nodes involved.
+    Uses memoization to avoid redundant traversals in large DAGs.
     """
     nodes_in_paths = set()
-    visited = set()  # Prevent revisiting nodes in the same path
+    memo = {}
 
     def dfs(current, path):
-        # Avoid cycles or infinite loops
+        # Avoid cycles
         if current in path:
-            return
+            return set()
+        # Memoization: if already computed, return cached result
+        if current in memo:
+            return memo[current]
         path.append(current)
         if current == genesis_id:
-            nodes_in_paths.update(path)
+            nodes = set(path)
+            nodes_in_paths.update(nodes)
+            path.pop()
+            memo[current] = nodes
+            return nodes
         else:
             parents = list(dag.graph.successors(current))
             if not parents:
-                # Dead end, genesis_id not reachable from this path
                 path.pop()
-                return
+                memo[current] = set()
+                return set()
+            total_nodes = set()
             for parent in parents:
-                dfs(parent, path)
-        path.pop()
+                parent_nodes = dfs(parent, path)
+                total_nodes.update(parent_nodes)
+            if total_nodes:
+                total_nodes.add(current)
+                nodes_in_paths.update(total_nodes)
+            path.pop()
+            memo[current] = total_nodes
+            return total_nodes
 
     dfs(tip, [])
     return nodes_in_paths
@@ -173,10 +187,10 @@ for round in range(R):
         if len(ppath) > len(longest_ppath):
             longest_ppath = ppath
     # Ridisegna l'ultimo frame evidenziando solo i nodi del path più lungo tip->genesis in verde
-    longest_ppath = longest_ppath.union(old_path)  # Unione con il vecchio path per mantenere i nodi precedenti
+    longest_ppath = longest_ppath.union(old_path)  # Unione con il vecchio path per mantenere i nodi verdi precedenti
     draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
     step+=1
-
+    #TODO: before removing, gather info on malicious/corrupted nodes confirmed and good nodes eliminated
     # Remove all nodes not in longest_ppath from the DAG
     nodes_to_remove = [n for n in list(dag.graph.nodes) if n not in longest_ppath]
     for n in nodes_to_remove:

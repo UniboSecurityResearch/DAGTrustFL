@@ -30,6 +30,8 @@ def draw_dag(dag, step, pos, folder="frames", highlight_nodes=None):
                 node_colors.append("red")  # Rosso per nodi malevoli
             elif dag.is_confirmed(node_id):
                 node_colors.append("royalblue")  # Blu scuro per confermati
+            elif getattr(node, "corrupted", False):  # Controlla se il nodo è corrotto
+                node_colors.append("orange")
             else:
                 node_colors.append("skyblue")    # Azzurro per non confermati
 
@@ -87,28 +89,42 @@ def generate_data_matrix(size=(3, 3), malicious=False, corrupted=False):
 
 def search_path_from_tip_to_lastroundFL(dag, tip, genesis_id):
     """
-    Recursively traverses all paths from the tip to the given genesis_id and returns a set of all nodes involved.
-    If genesis_id is not reachable from tip, the function will not loop infinitely.
+    Efficiently traverses all paths from the tip to the given genesis_id and returns a set of all nodes involved.
+    Uses memoization to avoid redundant traversals in large DAGs.
     """
     nodes_in_paths = set()
-    visited = set()  # Prevent revisiting nodes in the same path
+    memo = {}
 
     def dfs(current, path):
-        # Avoid cycles or infinite loops
+        # Avoid cycles
         if current in path:
-            return
+            return set()
+        # Memoization: if already computed, return cached result
+        if current in memo:
+            return memo[current]
         path.append(current)
         if current == genesis_id:
-            nodes_in_paths.update(path)
+            nodes = set(path)
+            nodes_in_paths.update(nodes)
+            path.pop()
+            memo[current] = nodes
+            return nodes
         else:
             parents = list(dag.graph.successors(current))
             if not parents:
-                # Dead end, genesis_id not reachable from this path
                 path.pop()
-                return
+                memo[current] = set()
+                return set()
+            total_nodes = set()
             for parent in parents:
-                dfs(parent, path)
-        path.pop()
+                parent_nodes = dfs(parent, path)
+                total_nodes.update(parent_nodes)
+            if total_nodes:
+                total_nodes.add(current)
+                nodes_in_paths.update(total_nodes)
+            path.pop()
+            memo[current] = total_nodes
+            return total_nodes
 
     dfs(tip, [])
     return nodes_in_paths
@@ -116,10 +132,10 @@ def search_path_from_tip_to_lastroundFL(dag, tip, genesis_id):
 matplotlib.use('Qt5Agg')
 
 # Simulazione di un DAG con X peer, cada uno fa Y nodi
-X= 4  # Numero di peer
-Y= 3   # Numero di nodi per peer
-R= 6  # Numero di round di FL
-malicious_percentage = 0.3  # Percentuale di peer malevoli
+X= 8  # Numero di peer
+Y= 2   # Numero di nodi per peer
+R= 4  # Numero di round di FL
+malicious_percentage = 0.2  # Percentuale di peer malevoli
 corrupted_percentage = 0.2  # Percentuale di peer corrotti
 
 
@@ -158,6 +174,7 @@ for round in range(R):
         for peer in peers:
             is_malicious = getattr(peer, "malicious", False)
             is_corrupted = getattr(peer, "corrupted", False)
+            print(is_malicious, is_corrupted)
             data_matrix = generate_data_matrix(malicious=is_malicious, corrupted=is_corrupted)
             node = DAGNode.DAGNode(data_matrix)
             node.malicious = is_malicious

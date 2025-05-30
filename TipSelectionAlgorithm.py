@@ -116,7 +116,6 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
         return sum(weighted_similarities) / total_weights if total_weights > 0 else 0
 
     def select_tips(self, dag: DAG, new_matrix, corrupted=False) -> list:
-        #TODO: Implement the corrupted behavior
         # Step 1: find all tips (CW < threshold)
         dag.update_cumulative_weights()
         candidate_tips = [
@@ -132,9 +131,16 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
             if score is not None:
                 scored.append((tip, score))
         # Sort by descending score
-        scored.sort(key=lambda x: x[1], reverse=True)
-        # Step 3: select the best unconfirmed nodes
-        selected = [tip for tip, _ in scored if _ >= self.similarity_threshold][:2]
+        if corrupted:
+            # If corrupted, the order is reversed to prioritize lower scores, i.e. malicious nodes
+            scored.sort(key=lambda x: x[1], reverse=False)
+            # Lower threshold for corrupted nodes
+            # Step 3: select the worst unconfirmed nodes
+            selected = [tip for tip, _ in scored if _ >= 0.0001][:2]
+        else:
+            scored.sort(key=lambda x: x[1], reverse=True)
+            # Step 3: select the best unconfirmed nodes
+            selected = [tip for tip, _ in scored if _ >= self.similarity_threshold][:2]
         # Step 4: if less than 2, add fallback from confirmed nodes with CW > threshold
         if len(selected) < 2:
             confirmed_nodes = [
@@ -147,8 +153,12 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
                 score = self.evaluate_similarity(node, dag, new_matrix)
                 if score is not None:
                     confirmed_scores.append((node, score))
-
-            confirmed_scores.sort(key=lambda x: x[1], reverse=True)
+            if corrupted:
+                # If corrupted, we want to select the worst confirmed nodes
+                confirmed_scores.sort(key=lambda x: x[1], reverse=False)
+            else:
+                # If not corrupted, we want to select the best confirmed nodes      
+                confirmed_scores.sort(key=lambda x: x[1], reverse=True)
             #print(f"Confirmed nodes: {confirmed_scores}")
             # Add the most similar confirmed nodes
             selected += [node for node, _ in confirmed_scores[:2 - len(selected)]]
