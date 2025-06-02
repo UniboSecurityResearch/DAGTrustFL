@@ -6,9 +6,9 @@ class DAGNode:
         self.id = str(uuid.uuid4())
         self.data = data_matrix
         self.approved_by = set()
-        self.cw = 1  # peso di quel nodo
-        self.malicious = malicious  # Indica se il nodo è malevolo
-        self.corrupted = corrupted
+        self.cw = 1  # weight of this node
+        self.malicious = malicious  # Indicates if the node is malicious
+        self.corrupted = corrupted  # Indicates if the node is corrupted
 
     def __repr__(self):
         return f"DAGNode({self.id[:8]}, malicious={self.malicious})"

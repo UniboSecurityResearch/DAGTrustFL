@@ -29,7 +29,7 @@ class DAG:
         for node in self.nodes.values():
             node.cw = 1
 
-        # Calcola approvazioni indirette usando DFS inversa
+        # Calculate indirect approvals using reverse DFS
         for node_id in self.graph.nodes:
             descendants = nx.descendants(self.graph.reverse(copy=False), node_id)
             self.nodes[node_id].cw += len(descendants) 
