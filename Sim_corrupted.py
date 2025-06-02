@@ -22,18 +22,28 @@ def draw_dag(dag, step, pos, folder="frames", highlight_nodes=None):
     # Colori dei nodi in base alla conferma, malevolenza e highlight
     node_colors = []
     for node_id in dag.graph.nodes:
+        node = dag.nodes[node_id]
         if highlight_nodes is not None and node_id in highlight_nodes:
-            node_colors.append("limegreen")  # Verde per highlight
+            if getattr(node, "corrupted", False):  # Controlla se il nodo è corrotto
+                node_colors.append("lightgreen")  # Verde chiaro per confermati ma corrotti
+            elif getattr(node, "malicious", False):  # Malevolo ma confermato
+                node_colors.append("#FFA1A1")  # Rosso chiaro per highlight malevolo
+            else:
+                node_colors.append("limegreen")  # Verde per highlight
         else:
-            node = dag.nodes[node_id]
-            if getattr(node, "malicious", False):  # Controlla se il nodo è malevolo
+            if dag.is_confirmed(node_id):
+                if getattr(node, "corrupted", False):  # Controlla se il nodo è corrotto
+                    node_colors.append("#98690A")  # Orange più scuro per corrotti confermati
+                elif getattr(node, "malicious", False):  # Malevolo ma confermato
+                    node_colors.append("darkred")
+                else:
+                    node_colors.append("royalblue")  # Blu scuro per buoni confermati
+            elif getattr(node, "malicious", False):  # Controlla se il nodo è malevolo
                 node_colors.append("red")  # Rosso per nodi malevoli
-            elif dag.is_confirmed(node_id):
-                node_colors.append("royalblue")  # Blu scuro per confermati
             elif getattr(node, "corrupted", False):  # Controlla se il nodo è corrotto
                 node_colors.append("orange")
             else:
-                node_colors.append("skyblue")    # Azzurro per non confermati
+                node_colors.append("skyblue")    # Azzurro per non buoni confermati
 
     # Disegna nodi e archi
     nx.draw(
@@ -165,10 +175,14 @@ pos = nx.spring_layout(dag.graph, seed=42)  # layout iniziale
 draw_dag(dag, step=0, pos=pos)
 last_node_prev_round = genesis
 longest_ppath = set()
-# Ogni peer aggiunge Y nodi
 step = 1
 added_node_ids = []
 frames_info = []  # Per salvare info dei frame se serve
+total_good_removed = 0
+total_malicious_confirmed = 0
+total_corrupted_confirmed = 0
+
+# Ogni peer aggiunge Y nodi
 for round in range(R):
     for _ in range(Y):
         for peer in peers:
@@ -185,32 +199,36 @@ for round in range(R):
             draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
             step += 1
 
-    # Mostra la matrice di un nodo specifico
-    #sample_id = added_node_ids[7]
-    #print(f"\nMatrice del nodo {sample_id[:9]}:\n{dag.get_node_data(sample_id)}")
     print(f"\n\nFINE {round+1} ROUND\nTotale nodi: {len(dag.nodes)} - Totale tips: {len(dag.tips)}")
     
-    # Trova il path più lungo tra tutti i tip (se esistono) fino al genesis
-    old_path= set(longest_ppath)
+    old_path = set(longest_ppath)
     longest_ppath = set()
     for tip in dag.tips:
         ppath = search_path_from_tip_to_lastroundFL(dag, tip, last_node_prev_round.id)
         if len(ppath) > len(longest_ppath):
             longest_ppath = ppath
-    # Ridisegna l'ultimo frame evidenziando solo i nodi del path più lungo tip->genesis in verde
-    longest_ppath = longest_ppath.union(old_path)  # Unione con il vecchio path per mantenere i nodi precedenti
+    longest_ppath = longest_ppath.union(old_path)
     draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
-    step+=1
+    step += 1
 
-    # Remove all nodes not in longest_ppath from the DAG
+    # Before removing, gather info on malicious/corrupted nodes confirmed and good nodes eliminated
+    num_malicious_confirmed = sum(1 for n in longest_ppath if getattr(dag.nodes.get(n, None), "malicious", False))
+    num_corrupted_confirmed = sum(1 for n in longest_ppath if getattr(dag.nodes.get(n, None), "corrupted", False))
     nodes_to_remove = [n for n in list(dag.graph.nodes) if n not in longest_ppath]
+    num_good_removed = sum(1 for n in nodes_to_remove if not getattr(dag.nodes.get(n, None), "malicious", False) and not getattr(dag.nodes.get(n, None), "corrupted", False))
+    print(f"Malicious nodes confirmed: {num_malicious_confirmed - total_malicious_confirmed}")
+    print(f"Corrupted nodes confirmed: {num_corrupted_confirmed - total_corrupted_confirmed}")
+    print(f"Good nodes eliminated: {num_good_removed}")
+
     for n in nodes_to_remove:
         dag.graph.remove_node(n)
         dag.nodes.pop(n, None)
         dag.tips.discard(n)
+    total_good_removed += num_good_removed
+    total_malicious_confirmed = num_malicious_confirmed
+    total_corrupted_confirmed = num_corrupted_confirmed
 
     #CREATING MILESTONE
-    # Save the last node found in the longest path for the next round
     last_node_prev_round = None
     last_node = None
     for node_id in longest_ppath:
@@ -219,8 +237,12 @@ for round in range(R):
             break
     if last_node is not None:
         last_node_prev_round = dag.nodes[last_node]
-    print("NEW MILESTONE: "+ str(last_node_prev_round.id))
+    print("NEW MILESTONE: " + str(last_node_prev_round.id))
     print("\n\n")
+
+print(f"Total Malicious nodes confirmed in this training: {total_malicious_confirmed}")
+print(f"Total Corrupted nodes confirmed in this training: {total_corrupted_confirmed}")
+print(f"Total Good nodes eliminated in this training: {total_good_removed}")
 make_gif()
 
 
