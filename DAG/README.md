@@ -1,5 +1,6 @@
-# DAGTrustFL
-Repository of the DAG architecture for enabling trust in Federated Learning
+# DAG
+Repository of the DAG architecture for enabling trust in Federated Learning. 
+## DAG SIMULATION
 
 ## Folders
 **.env** contains the virtual env for Python
