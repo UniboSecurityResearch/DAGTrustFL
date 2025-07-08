@@ -14,11 +14,11 @@ import gif
 matplotlib.use('Qt5Agg')
 
 # Simulazione di un DAG con X peer, cada uno fa Y nodi
-X= 8  # Numero di peer
-Y= 2   # Numero di nodi per peer
-R= 4  # Numero di round di FL
-malicious_percentage = 0.2  # Percentuale di peer malevoli
-corrupted_percentage = 0.2  # Percentuale di peer corrotti
+X= 10  # Numero di peer
+Y= 1   # Numero di nodi per peer
+R= 5  # Numero di round di FL
+malicious_percentage = 0.1  # Percentuale di peer malevoli
+corrupted_percentage = 0.4  # Percentuale di peer corrotti
 
 
 # Inizializza il DAG e il selettore di tip
@@ -74,9 +74,12 @@ for round in range(R):
     print(f"\n\nFINE {round+1} ROUND\nTotale nodi: {len(dag.nodes)} - Totale tips: {len(dag.tips)}")
     
     old_path = set(longest_ppath)
+    # Heaviest subgraph computations
     longest_ppath = set()
     for tip in dag.tips:
         ppath = dag_utils.search_path_from_tip_to_lastroundFL(dag, tip, last_node_prev_round.id)
+        #TODO
+        # Aggiungere check del past cone come dal tip selection algorithm
         if len(ppath) > len(longest_ppath):
             longest_ppath = ppath
     longest_ppath = longest_ppath.union(old_path)
@@ -92,6 +95,7 @@ for round in range(R):
     print(f"Corrupted nodes confirmed: {num_corrupted_confirmed - total_corrupted_confirmed}")
     print(f"Good nodes eliminated: {num_good_removed}")
 
+    # Remove nodes outside of the heaviest subgraph
     for n in nodes_to_remove:
         dag.graph.remove_node(n)
         dag.nodes.pop(n, None)
@@ -100,7 +104,19 @@ for round in range(R):
     total_malicious_confirmed = num_malicious_confirmed
     total_corrupted_confirmed = num_corrupted_confirmed
 
+
+    #TODO
+    # Aggiungere calcoli trust del nodo centrale (structural consistency e updates contributions)
+    # Così da avere i valori per il weighted FedAvg
+
+
+
+    
     #CREATING MILESTONE
+    #TODO
+    #Da cambiare: adesso la milestone è un nuovo nodo che contiene il global model
+    # e viene aggiunto al DAG come un normale nodo, ma in futuro potrebbe essere
+    # un nodo speciale o un'operazione di aggregazione
     last_node_prev_round = None
     last_node = None
     for node_id in longest_ppath:

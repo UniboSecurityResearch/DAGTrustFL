@@ -62,7 +62,7 @@ class IOTALikeTipSelector:
 class MyCustomTipSelector(TipSelectionAlgorithm):
 
     def __init__(self, max_depth=4, similarity_threshold=0.4, cw_penalty_factor=0.05):
-        self.max_depth = max_depth
+        self.max_depth = max_depth #chi, depth of the past cone to inspect
         self.similarity_threshold = similarity_threshold
         self.cw_penalty_factor = cw_penalty_factor  # Factor to penalize high CW nodes
 
@@ -82,8 +82,16 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
         magnitude_penalty = 1 - abs(norm_v1 - norm_v2) / max(norm_v1, norm_v2)
         # Return a combination of cosine similarity and magnitude penalty
         return cosine_sim * magnitude_penalty
+    
+    def euclidean_distance(self, m1, m2):
+        #TODO
+        v1 = m1.flatten()
+        v2 = m2.flatten()
+        return np.linalg.norm(v1 - v2)
 
     # Evaluate similarity score recursively up to a maximum depth
+    # It evaluates also the past cone of the transaction, to check for
+    # corrupted behaviors
     def evaluate_similarity(self, node_id, dag: DAG, new_matrix):
         visited = set()
         queue = [(node_id, 0)]
@@ -104,6 +112,11 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
             cw_penalty = 1 / (1 + self.cw_penalty_factor * dag.nodes[current].cw)
             if not np.isnan(sim):
                 weight = 2.0 if depth == 0 else (1 / (1 + depth**2))
+                # TODO
+                # DA SISTEMARE CHECK SUL THRESHOLD; SE SOTTO IL NODO VA ESCLUSO!
+                if sim < self.similarity_threshold:
+                    print(f"Node {current} excluded due to low similarity")
+                    continue
                 weighted_similarity = weight * sim * cw_penalty
                 weighted_similarities.append(weighted_similarity)
                 total_weights += weight
