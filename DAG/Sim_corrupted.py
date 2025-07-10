@@ -16,17 +16,18 @@ matplotlib.use('Qt5Agg')
 # Simulazione di un DAG con X peer, cada uno fa Y nodi
 X= 10  # Numero di peer
 Y= 1   # Numero di nodi per peer
-R= 5  # Numero di round di FL
-malicious_percentage = 0.1  # Percentuale di peer malevoli
-corrupted_percentage = 0.4  # Percentuale di peer corrotti
+R= 1  # Numero di round di FL
+malicious_percentage = 0.2  # Percentuale di peer malevoli
+corrupted_percentage = 0.2  # Percentuale di peer corrotti
 
 
 # Inizializza il DAG e il selettore di tip
 dag = DAG.DAG()
-selector = TipSelectionAlgorithm.MyCustomTipSelector()
+selector = TipSelectionAlgorithm.TrustInformedTipSelector()
 
 # Crea X peer
 peers = [Peer.Peer(dag, selector, name=f"Peer{i}") for i in range(X)]
+central_node = Peer.Peer(dag, selector, name="CentralNode")  # Nodo centrale per aggregazione
 
 # Seleziona casualmente i peer malevoli in base alla percentuale
 num_malicious = int(X * malicious_percentage)
@@ -41,11 +42,14 @@ for idx in corrupted_indices:
     peers[idx].corrupted = True
 
 # Nodo iniziale
-genesis = DAGNode.DAGNode(np.zeros((3, 3)))
-dag.add_node(genesis, [])
+genesis = DAGNode.DAGNode(dag_utils.generate_data_matrix(malicious=False, corrupted=False))
+central_node.manual_add_node(genesis, [])
+#dag.add_node(genesis, [])
 pos = nx.spring_layout(dag.graph, seed=42)  # layout iniziale
 dag_utils.draw_dag(dag, step=0, pos=pos)
 last_node_prev_round = genesis
+#second_node = DAGNode.DAGNode(np.zeros((3, 3)))
+#dag.add_node(second_node, [])
 longest_ppath = set()
 step = 1
 added_node_ids = []
@@ -60,7 +64,7 @@ for round in range(R):
         for peer in peers:
             is_malicious = getattr(peer, "malicious", False)
             is_corrupted = getattr(peer, "corrupted", False)
-            print(is_malicious, is_corrupted)
+            #print(is_malicious, is_corrupted)
             data_matrix = dag_utils.generate_data_matrix(malicious=is_malicious, corrupted=is_corrupted)
             node = DAGNode.DAGNode(data_matrix)
             node.malicious = is_malicious
@@ -76,12 +80,18 @@ for round in range(R):
     old_path = set(longest_ppath)
     # Heaviest subgraph computations
     longest_ppath = set()
-    for tip in dag.tips:
-        ppath = dag_utils.search_path_from_tip_to_lastroundFL(dag, tip, last_node_prev_round.id)
+    unconfirmed_tips = [tip for tip in dag.tips if not dag.is_confirmed(tip)]
+    for tip in unconfirmed_tips:
         #TODO
         # Aggiungere check del past cone come dal tip selection algorithm
-        if len(ppath) > len(longest_ppath):
-            longest_ppath = ppath
+        nodes_to_remove= selector.check_past_cone_similarity([tip], dag)
+        print("Evaluating longest path from tip: " + str(tip))
+        if(len(nodes_to_remove) == 0):
+            ppath = dag_utils.search_path_from_tip_to_lastroundFL(dag, tip, last_node_prev_round.id)
+            if len(ppath) > len(longest_ppath):
+                longest_ppath = ppath
+        else:
+            print("CORRUPTED")
     longest_ppath = longest_ppath.union(old_path)
     dag_utils.draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
     step += 1
@@ -111,7 +121,7 @@ for round in range(R):
 
 
 
-    
+
     #CREATING MILESTONE
     #TODO
     #Da cambiare: adesso la milestone è un nuovo nodo che contiene il global model
@@ -125,8 +135,17 @@ for round in range(R):
             break
     if last_node is not None:
         last_node_prev_round = dag.nodes[last_node]
+    milestone = DAGNode.DAGNode(dag_utils.generate_data_matrix(malicious=False, corrupted=False))
+    central_node.manual_add_node(milestone, [last_node_prev_round.id])
+    longest_ppath.add(milestone.id)
+    print(longest_ppath)
     print("NEW MILESTONE: " + str(last_node_prev_round.id))
     print("\n\n")
+    added_node_ids.append(node_id)
+    pos = nx.spring_layout(dag.graph, seed=42, pos=pos, fixed=list(pos.keys()))
+    dag_utils.draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
+    step+=1
+    
 
 print(f"Total Malicious nodes confirmed in this training: {total_malicious_confirmed}")
 print(f"Total Corrupted nodes confirmed in this training: {total_corrupted_confirmed}")
