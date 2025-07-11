@@ -119,8 +119,6 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
             cw_penalty = 1 / (1 + self.cw_penalty_factor * dag.nodes[current].cw)
             if not np.isnan(sim):
                 weight = 2.0 if depth == 0 else (1 / (1 + depth**2))
-                # TODO
-                # DA SISTEMARE CHECK SUL THRESHOLD; SE SOTTO IL NODO VA ESCLUSO!
                 if sim < self.similarity_threshold:
                     print(f"Node {current} excluded due to low similarity")
                     continue
@@ -189,7 +187,7 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
             selected += backup_nodes[:2 - len(selected)]
         return selected[:2]
     
-    def check_past_cone_similarity(self, selected_nodes, dag: DAG):
+    def check_past_cone_similarity(self, selected_nodes, dag: DAG, debug=0):
         """
         Check if any node in the past cone of selected nodes has low similarity with its parents.
         Returns a list of nodes that should be removed from selection.
@@ -216,7 +214,8 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
                     sim = self.cosine_similarity(current_matrix, parent_matrix)
                     
                     if not np.isnan(sim) and sim < self.similarity_threshold:
-                        print(f"Node {node_id} excluded due to low similarity ({sim:.4f}) between node {current} and its parent {parent}")
+                        if debug == 1:
+                            print(f"Node {node_id} excluded due to low similarity ({sim:.4f}) between node {current} and its parent {parent}")
                         should_remove_node = True
                         break
                 
@@ -271,7 +270,7 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
         weighted_similarity = weight * sim * cw_penalty
         return weighted_similarity if not np.isnan(sim) else 0
     
-    def check_past_cone_similarity(self, selected_nodes, dag: DAG):
+    def check_past_cone_similarity(self, selected_nodes, dag: DAG, debug=0):
         """
         Check if any node in the past cone of selected nodes has low similarity with its parents (corrupted behavior).
         Returns a list of nodes that should be removed from selection.
@@ -298,7 +297,8 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
                     sim = self.cosine_similarity(current_matrix, parent_matrix)
                     
                     if not np.isnan(sim) and sim < self.similarity_threshold:
-                        print(f"Node {node_id} excluded due to low similarity ({sim:.4f}) between node {current} and its parent {parent}")
+                        if debug == 1:
+                            print(f"Node {node_id} excluded due to low similarity ({sim:.4f}) between node {current} and its parent {parent}")
                         should_remove_node = True
                         break
                 
@@ -394,7 +394,7 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
                             confirmed_scores = [(tip, score) for tip, score in confirmed_scores if tip != node_id]
                 print(f"New selected: {new_selected}")
                 selected += new_selected
-        # Step 5: if still less than 2, pick any other node as final fallback
+        # Step 5: if still 0, pick any other node as final fallback
         if len(selected) < 1:
             backup_nodes = [n for n in dag.graph.nodes if n not in selected]
             random.shuffle(backup_nodes)
