@@ -3,9 +3,10 @@ import DAGNode
 import numpy as np
 import TipSelectionAlgorithm
 class Peer:
-    def __init__(self, dag: DAG, selector: TipSelectionAlgorithm, name="Peer", malicious=False, corrupted=False):
+    def __init__(self, dag: DAG, selector: TipSelectionAlgorithm, id, name="Peer", malicious=False, corrupted=False):
         self.dag = dag
         self.selector = selector
+        self.id = id
         self.name = name
         self.malicious = malicious
         self.corrupted = corrupted

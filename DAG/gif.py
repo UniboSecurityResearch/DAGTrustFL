@@ -10,7 +10,7 @@ import os
 from PIL import Image
 import shutil
 
-def make_gif(frame_folder="frames", output_gif="dag_evolution.gif", duration=800):
+def make_gif(frame_folder="../DAG/frames", output_gif="dag_evolution.gif", duration=800):
     images = []
     frame_files = sorted([f for f in os.listdir(frame_folder) if f.endswith(".png")])
     for filename in frame_files:

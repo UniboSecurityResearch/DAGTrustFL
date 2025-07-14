@@ -10,7 +10,7 @@ import os
 from PIL import Image
 import shutil
 
-def draw_dag(dag, step, pos, folder="frames", highlight_nodes=None):
+def draw_dag(dag, step, pos, folder="../DAG/frames", highlight_nodes=None):
     # Rimuovi i file vecchi dalla cartella frames
     if step == 0:  # Solo al primo step
         if os.path.exists(folder):

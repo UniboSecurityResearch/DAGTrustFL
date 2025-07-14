@@ -2,9 +2,10 @@ import networkx as nx
 import uuid
 
 class DAGNode:
-    def __init__(self, data_matrix, malicious=False, corrupted=False, peer=None):
+    def __init__(self, data_matrix, peer, epoch, malicious=False, corrupted=False):
         self.id = str(uuid.uuid4())
         self.peer = peer
+        self.epoch = epoch
         self.data = data_matrix
         self.approved_by = set()
         self.cw = 1  # weight of this node
