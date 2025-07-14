@@ -17,7 +17,7 @@ matplotlib.use('Qt5Agg')
 X= 10  # Numero di peer
 Y= 1   # Numero di nodi per peer
 R= 4  # Numero di round di FL
-malicious_percentage = 0.2  # Percentuale di peer malevoli
+malicious_percentage = 0.3  # Percentuale di peer malevoli
 corrupted_percentage = 0.2  # Percentuale di peer corrotti
 
 trust_vector = [1] * X
@@ -127,8 +127,8 @@ for round in range(R):
         
         # If this peer has a node in the longest path, check its past cone similarity
         if peer_node_in_path is not None:
-            nodes_to_remove = selector.check_past_cone_similarity([peer_node_in_path], dag)
-            if len(nodes_to_remove) > 0:
+            nodes_outside = selector.check_past_cone_similarity([peer_node_in_path], dag)
+            if len(nodes_outside) > 0:
                 structural_consistency = 0  # Corrupted behavior detected in this peer's node past cone
                 print(f"Peer {i} ({peer.name}): Corrupted behavior detected in node {peer_node_in_path[:6]}")
         else:
@@ -141,8 +141,8 @@ for round in range(R):
                     # The update was outside the heaviest subgraph, so updates contributions is 0
                     updates_contribution = 0
                     # Check this peer's node even if not in longest path
-                    nodes_to_remove = selector.check_past_cone_similarity([node_id], dag)
-                    if len(nodes_to_remove) > 0:
+                    nodes_outside = selector.check_past_cone_similarity([node_id], dag)
+                    if len(nodes_outside) > 0:
                         structural_consistency = 0  # Corrupted behavior detected
                         print(f"Peer {i} ({peer.name}): Corrupted behavior detected outside heaviest graph in node {node_id[:6]} (not in longest path)")
                     break
