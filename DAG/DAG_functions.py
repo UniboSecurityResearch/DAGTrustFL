@@ -66,8 +66,23 @@ def init_DAG(initial_params):
     for idx in corrupted_indices:
         peers[idx].corrupted = True
 
-    # Nodo iniziale
-    genesis = DAGNode.DAGNode(dag_utils.generate_data_matrix(malicious=False, corrupted=False), peer=central_node, epoch=0)
+    # Genesis node - use the first client's parameters as template for structure
+    if initial_params and len(initial_params) > 0:
+        # Get the first client's parameters as a template and create a neutral version
+        first_client_params = list(initial_params.values())[0]
+        try:
+            import parameter_utils
+            # Use the safer copy_parameter_structure function instead of random generation
+            genesis_params = parameter_utils.copy_parameter_structure(first_client_params)
+        except (ImportError, Exception) as e:
+            print(f"Warning: Could not create genesis parameters from template: {e}")
+            # Fallback to simple matrix if parameter_utils not available
+            genesis_params = dag_utils.generate_data_matrix(malicious=False, corrupted=False)
+    else:
+        # Fallback to simple matrix
+        genesis_params = dag_utils.generate_data_matrix(malicious=False, corrupted=False)
+    
+    genesis = DAGNode.DAGNode(genesis_params, peer=central_node, epoch=0)
     central_node.manual_add_node(genesis, [])
     pos = nx.spring_layout(dag.graph, seed=42)  # layout iniziale
     dag_utils.draw_dag(dag, step=0, pos=pos)
@@ -81,15 +96,27 @@ def init_DAG(initial_params):
 def get_trust_vector(parameters_clients, epoch):
     global dag, selector, peers, longest_ppath, step, added_node_ids, total_good_removed, total_malicious_confirmed, total_corrupted_confirmed, trust_vector, structural_consistencies, updates_contributions, last_node_prev_round, pos
     
-    #GIACOMO: prendere i parameters e metterli nelle matrici dei nodi
+    #GIACOMO: Take the actual neural network parameters and put them in the DAG nodes
     for peer in peers:
         if peer.id in parameters_clients.keys():
             print("NODO NUMERO " + str(peer.id))
             is_malicious = getattr(peer, "malicious", False)
             is_corrupted = getattr(peer, "corrupted", False)
-            #print(is_malicious, is_corrupted)
-            data_matrix = dag_utils.generate_data_matrix(malicious=is_malicious, corrupted=is_corrupted)
-            node = DAGNode.DAGNode(data_matrix, peer=peer, epoch=epoch)
+            
+            # Use the actual neural network parameters from the client
+            actual_parameters = parameters_clients[peer.id]
+            
+            # For testing purposes, we can still modify parameters for malicious/corrupted peers
+            # but in the real system, the detection should work with actual parameter differences
+            if is_malicious:
+                # For malicious peers, we could potentially modify their parameters
+                # but let's use the actual parameters for now to test real detection
+                pass
+            if is_corrupted:
+                # For corrupted peers, same approach
+                pass
+                
+            node = DAGNode.DAGNode(actual_parameters, peer=peer, epoch=epoch)
             node.malicious = is_malicious
             node.corrupted = is_corrupted
             node_id = peer.add_node(node)
@@ -208,8 +235,9 @@ def milestone(new_nn_params, epoch):
             break
     if last_node is not None:
         last_node_prev_round = dag.nodes[last_node]
-    #GIACOMO: prendere i new_nn_params e metterlo nella matrice del milestone
-    milestone = DAGNode.DAGNode(dag_utils.generate_data_matrix(malicious=False, corrupted=False), peer=central_node, epoch=epoch)
+    
+    # Use the actual aggregated neural network parameters for the milestone
+    milestone = DAGNode.DAGNode(new_nn_params, peer=central_node, epoch=epoch)
     central_node.manual_add_node(new_node=milestone, selected_parents=[last_node_prev_round.id])
     longest_ppath.add(milestone.id)
     print("NEW MILESTONE: " + str(milestone.id))

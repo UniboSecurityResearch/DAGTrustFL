@@ -1,6 +1,7 @@
 import DAG
 import numpy as np
 import random
+import parameter_utils
 
 class TipSelectionAlgorithm:
     def select_tips(self, dag: DAG) -> list:
@@ -66,27 +67,15 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
         self.similarity_threshold = similarity_threshold
         self.cw_penalty_factor = cw_penalty_factor  # Factor to penalize high CW nodes
 
-    # Cosine similarity between two matrices - also considers magnitude!
+    # Cosine similarity between two parameter sets - also considers magnitude!
     # This method is used in Zhu et Al. (2024)
-    def cosine_similarity(self, m1, m2):
-        v1 = m1.flatten()
-        v2 = m2.flatten()
-        norm_v1 = np.linalg.norm(v1)
-        norm_v2 = np.linalg.norm(v2)
-        # Check if either norm is zero to avoid division by zero
-        if norm_v1 == 0 or norm_v2 == 0:
-            return 0  # Zero similarity if one of the vectors is null
-        # Standard cosine similarity
-        cosine_sim = np.dot(v1, v2) / (norm_v1 * norm_v2)
-        # Penalize magnitude differences
-        magnitude_penalty = 1 - abs(norm_v1 - norm_v2) / max(norm_v1, norm_v2)
-        # Return a combination of cosine similarity and magnitude penalty
-        return cosine_sim * magnitude_penalty
+    def cosine_similarity(self, params1, params2):
+        return parameter_utils.cosine_similarity_parameters(params1, params2)
     
-    def euclidean_distance(self, m1, m2):
+    def euclidean_distance(self, params1, params2):
         #TODO
-        v1 = m1.flatten()
-        v2 = m2.flatten()
+        v1 = parameter_utils.flatten_parameters(params1)
+        v2 = parameter_utils.flatten_parameters(params2)
         return np.linalg.norm(v1 - v2)
 
     # Evaluate similarity score recursively up to a maximum depth
@@ -99,7 +88,7 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
     # to avoid selecting nodes that are too heavy in the DAG.
     # So the check for corrupted behavior, it only consider its matrix with all the past cone
     # It does not compare the matrix of parents node with their own parents!
-    def evaluate_similarity(self, node_id, dag: DAG, new_matrix):
+    def evaluate_similarity(self, node_id, dag: DAG, new_parameters):
         visited = set()
         queue = [(node_id, 0)]
         weighted_similarities = []
@@ -110,10 +99,10 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
             if current in visited or depth > self.max_depth:
                 continue
             visited.add(current)
-            current_matrix = dag.nodes[current].data
+            current_parameters = dag.nodes[current].data
 
-            # Calculate similarity between the new matrix and the current node's matrix
-            sim = self.cosine_similarity(new_matrix, current_matrix)
+            # Calculate similarity between the new parameters and the current node's parameters
+            sim = self.cosine_similarity(new_parameters, current_parameters)
 
             # Penalize nodes with high CW
             cw_penalty = 1 / (1 + self.cw_penalty_factor * dag.nodes[current].cw)
@@ -133,7 +122,7 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
         # Calculate the weighted average similarity
         return sum(weighted_similarities) / total_weights if total_weights > 0 else 0
 
-    def select_tips(self, dag: DAG, new_matrix, corrupted=False) -> list:
+    def select_tips(self, dag: DAG, new_parameters, corrupted=False) -> list:
         # Step 1: find all tips (CW < threshold)
         dag.update_cumulative_weights()
         candidate_tips = [
@@ -144,7 +133,7 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
         # Step 2: calculate similarity (including parents) for each tip
         scored = []
         for tip in candidate_tips:
-            score = self.evaluate_similarity(tip, dag, new_matrix)
+            score = self.evaluate_similarity(tip, dag, new_parameters)
             #print(f"Tip: {tip}, Score: {score}")
             if score is not None:
                 scored.append((tip, score))
@@ -168,7 +157,7 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
             # Filter confirmed nodes for those that are similar
             confirmed_scores = []
             for node in confirmed_nodes:
-                score = self.evaluate_similarity(node, dag, new_matrix)
+                score = self.evaluate_similarity(node, dag, new_parameters)
                 if score is not None:
                     confirmed_scores.append((node, score))
             if corrupted:
@@ -235,38 +224,26 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
         self.similarity_threshold = similarity_threshold
         self.cw_penalty_factor = cw_penalty_factor  # Factor to penalize high CW nodes
 
-    # Cosine similarity between two matrices - also considers magnitude!
+    # Cosine similarity between two parameter sets - also considers magnitude!
     # This method is used in Zhu et Al. (2024)
-    def cosine_similarity(self, m1, m2):
-        v1 = m1.flatten()
-        v2 = m2.flatten()
-        norm_v1 = np.linalg.norm(v1)
-        norm_v2 = np.linalg.norm(v2)
-        # Check if either norm is zero to avoid division by zero
-        if norm_v1 == 0 or norm_v2 == 0:
-            return 0  # Zero similarity if one of the vectors is null
-        # Standard cosine similarity
-        cosine_sim = np.dot(v1, v2) / (norm_v1 * norm_v2)
-        # Penalize magnitude differences
-        magnitude_penalty = 1 - abs(norm_v1 - norm_v2) / max(norm_v1, norm_v2)
-        # Return a combination of cosine similarity and magnitude penalty
-        return cosine_sim * magnitude_penalty
+    def cosine_similarity(self, params1, params2):
+        return parameter_utils.cosine_similarity_parameters(params1, params2)
     
-    def euclidean_distance(self, m1, m2):
+    def euclidean_distance(self, params1, params2):
         #TODO
-        v1 = m1.flatten()
-        v2 = m2.flatten()
+        v1 = parameter_utils.flatten_parameters(params1)
+        v2 = parameter_utils.flatten_parameters(params2)
         return np.linalg.norm(v1 - v2)
 
     # Evaluate similarity score recursively up to a maximum depth
     # It evaluates also the past cone of the transaction, to check for
     # corrupted behaviors
-    def evaluate_similarity(self, node_id, dag: DAG, new_matrix):
+    def evaluate_similarity(self, node_id, dag: DAG, new_parameters):
         weight=1
         cw_penalty = 1
-        # Calculate similarity between the new matrix and the current node's matrix
-        current_matrix = dag.nodes[node_id].data
-        sim = self.cosine_similarity(new_matrix, current_matrix)
+        # Calculate similarity between the new parameters and the current node's parameters
+        current_parameters = dag.nodes[node_id].data
+        sim = self.cosine_similarity(new_parameters, current_parameters)
         weighted_similarity = weight * sim * cw_penalty
         return weighted_similarity if not np.isnan(sim) else 0
     
@@ -286,15 +263,15 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
                 if current in visited or depth > self.max_depth:
                     continue
                 visited.add(current)
-                current_matrix = dag.nodes[current].data
+                current_parameters = dag.nodes[current].data
                 
                 # Get parent nodes of current node
                 parent_nodes = list(dag.graph.successors(current))
                 
-                # Compare current node's matrix with each parent's matrix
+                # Compare current node's parameters with each parent's parameters
                 for parent in parent_nodes:
-                    parent_matrix = dag.nodes[parent].data
-                    sim = self.cosine_similarity(current_matrix, parent_matrix)
+                    parent_parameters = dag.nodes[parent].data
+                    sim = self.cosine_similarity(current_parameters, parent_parameters)
                     
                     if not np.isnan(sim) and sim < self.similarity_threshold:
                         if debug == 1:
@@ -311,7 +288,7 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
         
         return nodes_to_remove
 
-    def select_tips(self, dag: DAG, new_matrix, corrupted=False) -> list:
+    def select_tips(self, dag: DAG, new_parameters, corrupted=False) -> list:
         # Step 1: find all tips (CW < Theta)
         dag.update_cumulative_weights()
         candidate_tips = [
@@ -323,7 +300,7 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
         scored = []
         selected = []
         for tip in candidate_tips:
-            score = self.evaluate_similarity(tip, dag, new_matrix)
+            score = self.evaluate_similarity(tip, dag, new_parameters)
             #print(f"Tip: {tip}, Score: {score}")
             if score is not None:
                 scored.append((tip, score))
@@ -365,7 +342,7 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
             # Filter confirmed nodes for those that are similar
             confirmed_scores = []
             for node in confirmed_nodes:
-                score = self.evaluate_similarity(node, dag, new_matrix)
+                score = self.evaluate_similarity(node, dag, new_parameters)
                 if score is not None:
                     confirmed_scores.append((node, score))
             if corrupted:
