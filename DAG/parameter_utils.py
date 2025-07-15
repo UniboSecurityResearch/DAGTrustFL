@@ -67,6 +67,88 @@ def cosine_similarity_parameters(params1, params2):
     # Return a combination of cosine similarity and magnitude penalty
     return cosine_sim * magnitude_penalty
 
+def debug_similarity(params1, params2, verbose=True):
+    """
+    Debug version of cosine similarity to understand what's happening.
+    """
+    v1 = flatten_parameters(params1)
+    v2 = flatten_parameters(params2)
+    
+    if verbose:
+        print(f"Flattened vector 1 shape: {v1.shape}")
+        print(f"Flattened vector 2 shape: {v2.shape}")
+        print(f"Vector 1 stats: mean={np.mean(v1):.6f}, std={np.std(v1):.6f}, min={np.min(v1):.6f}, max={np.max(v1):.6f}")
+        print(f"Vector 2 stats: mean={np.mean(v2):.6f}, std={np.std(v2):.6f}, min={np.min(v2):.6f}, max={np.max(v2):.6f}")
+    
+    norm_v1 = np.linalg.norm(v1)
+    norm_v2 = np.linalg.norm(v2)
+    
+    if verbose:
+        print(f"Norm v1: {norm_v1:.6f}")
+        print(f"Norm v2: {norm_v2:.6f}")
+    
+    # Check if either norm is zero to avoid division by zero
+    if norm_v1 == 0 or norm_v2 == 0:
+        if verbose:
+            print("One of the norms is zero!")
+        return 0
+    
+    # Standard cosine similarity
+    dot_product = np.dot(v1, v2)
+    cosine_sim = dot_product / (norm_v1 * norm_v2)
+    
+    # Magnitude penalty
+    magnitude_penalty = 1 - abs(norm_v1 - norm_v2) / max(norm_v1, norm_v2)
+    
+    final_sim = cosine_sim * magnitude_penalty
+    
+    if verbose:
+        print(f"Dot product: {dot_product:.6f}")
+        print(f"Cosine similarity (raw): {cosine_sim:.6f}")
+        print(f"Magnitude penalty: {magnitude_penalty:.6f}")
+        print(f"Final similarity: {final_sim:.6f}")
+    
+    return final_sim
+
+def cosine_similarity_parameters_improved(params1, params2):
+    """
+    Improved cosine similarity calculation for neural network parameters.
+    
+    Args:
+        params1: First set of parameters
+        params2: Second set of parameters
+        
+    Returns:
+        float: Cosine similarity score
+    """
+    v1 = flatten_parameters(params1)
+    v2 = flatten_parameters(params2)
+    
+    # Check if vectors have different shapes
+    if v1.shape != v2.shape:
+        print(f"Warning: Parameter vectors have different shapes: {v1.shape} vs {v2.shape}")
+        min_len = min(len(v1), len(v2))
+        v1 = v1[:min_len]
+        v2 = v2[:min_len]
+    
+    norm_v1 = np.linalg.norm(v1)
+    norm_v2 = np.linalg.norm(v2)
+    
+    # Check if either norm is zero to avoid division by zero
+    if norm_v1 == 0 or norm_v2 == 0:
+        return 0
+    
+    # Standard cosine similarity (without magnitude penalty for now)
+    cosine_sim = np.dot(v1, v2) / (norm_v1 * norm_v2)
+    
+    # Ensure the result is in [-1, 1] range
+    cosine_sim = np.clip(cosine_sim, -1.0, 1.0)
+    
+    # Convert to [0, 1] range for compatibility with existing code
+    normalized_sim = (cosine_sim + 1) / 2
+    
+    return normalized_sim
+
 def get_parameter_statistics(parameters):
     """
     Get statistical information about the parameters for visualization.

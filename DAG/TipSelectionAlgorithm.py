@@ -109,7 +109,7 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
             if not np.isnan(sim):
                 weight = 2.0 if depth == 0 else (1 / (1 + depth**2))
                 if sim < self.similarity_threshold:
-                    print(f"Node {current} excluded due to low similarity")
+                    print(f"Node {current} excluded due to low similarity {sim:.4f}")
                     continue
                 weighted_similarity = weight * sim * cw_penalty
                 weighted_similarities.append(weighted_similarity)
@@ -219,7 +219,7 @@ class MyCustomTipSelector(TipSelectionAlgorithm):
 
 class TrustInformedTipSelector(TipSelectionAlgorithm):
 
-    def __init__(self, max_depth=4, similarity_threshold=0.2, cw_penalty_factor=0.05):
+    def __init__(self, max_depth=3, similarity_threshold=0.1, cw_penalty_factor=0.05):
         self.max_depth = max_depth #chi, depth of the past cone to inspect
         self.similarity_threshold = similarity_threshold
         self.cw_penalty_factor = cw_penalty_factor  # Factor to penalize high CW nodes
@@ -247,7 +247,7 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
         weighted_similarity = weight * sim * cw_penalty
         return weighted_similarity if not np.isnan(sim) else 0
     
-    def check_past_cone_similarity(self, selected_nodes, dag: DAG, debug=0):
+    def check_past_cone_similarity(self, selected_nodes, dag: DAG, debug=1):
         """
         Check if any node in the past cone of selected nodes has low similarity with its parents (corrupted behavior).
         Returns a list of nodes that should be removed from selection.
