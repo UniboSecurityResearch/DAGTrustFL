@@ -55,12 +55,26 @@ def draw_dag(dag, step, pos, folder="../DAG/frames", highlight_nodes=None):
         edge_color="gray",
         arrows=True
     )
-    # Etichette: ID abbreviato + CW + media matrice, in grassetto
+    # Etichette: ID abbreviato + CW + media matrice + peer number, in grassetto
     labels = {}
     for node_id in dag.graph.nodes:
         node = dag.nodes[node_id]
         matrix_mean = np.mean(node.data)
-        labels[node_id] = f"{node_id[:4]}\nCW={node.cw}\nμ={matrix_mean:.2f}"
+        
+        # Get peer information
+        peer_info = ""
+        if hasattr(node, 'peer') and node.peer is not None:
+            if hasattr(node.peer, 'name'):
+                # Extract peer number from name (e.g., "Peer0" -> "P0", "CentralNode" -> "CN")
+                if "Peer" in node.peer.name:
+                    peer_num = node.peer.name.replace("Peer", "")
+                    peer_info = f"\nP{peer_num}"
+                elif "Central" in node.peer.name:
+                    peer_info = "\nCN"
+                else:
+                    peer_info = f"\n{node.peer.name[:2]}"
+        
+        labels[node_id] = f"{node_id[:4]}\nCW={node.cw}\nμ={matrix_mean:.2f}{peer_info}"
 
     nx.draw_networkx_labels(
         dag.graph,

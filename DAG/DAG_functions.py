@@ -43,9 +43,9 @@ total_corrupted_confirmed = 0
 pos = None
 
 
-def init_DAG():
+def init_DAG(initial_params):
     global dag, selector, peers, central_node, malicious_indices, num_malicious, num_corrupted, corrupted_indices, last_node_prev_round, pos
-    
+    #print(initial_params[0])
     # Inizializza il DAG e il selettore di tip
     dag = DAG.DAG()
     selector = TipSelectionAlgorithm.TrustInformedTipSelector()
@@ -140,6 +140,8 @@ def get_trust_vector(parameters_clients, epoch):
             if hasattr(node, 'peer') and node.peer == peer and node.epoch == epoch:
                 peer_node_in_path = node_id
                 break
+            #TODO: to add efficiency, stop when you find last_node_prev_round node
+            #but it depends on the fact that the order in longest_ppath is the same as in the graph -> to be checked
         
         # If this peer has a node in the longest path and last FL round, check its past cone similarity
         if peer_node_in_path is not None:
@@ -168,10 +170,15 @@ def get_trust_vector(parameters_clients, epoch):
                 print(f"Peer {i} ({peer.name}): No node found in the graph for this FL round")
                 #The peer didn't participate in this round, so we assume update contributions is 0.5
                 updates_contribution = 0.5
-        updates_contributions.append(updates_contribution)
-        structural_consistencies.append(structural_consistency)
+        if i >= len(updates_contributions):
+            updates_contributions.append(updates_contribution)
+            structural_consistencies.append(structural_consistency)
+        else:
+            # Update existing values    
+            updates_contributions[i] = updates_contribution
+            structural_consistencies[i] = structural_consistency
         trust_value = upsilon_1 * structural_consistency + upsilon_2 * updates_contribution
-        trust_value_t = (1-lambda_) * trust_value + lambda_ * (trust_vector[i] if i < len(trust_vector) else 1)  # Historical trust influence
+        trust_value_t = (1-lambda_) * trust_value + lambda_ * (trust_vector[i] if i < len(trust_vector) else trust_value)  # Historical trust influence
         trust_vector[i] = trust_value_t
     print(f"Structural Consistency vector: {structural_consistencies}")
     print(f"Update Contributions vector: {updates_contributions}")
@@ -187,14 +194,13 @@ def get_trust_vector(parameters_clients, epoch):
     total_malicious_confirmed = num_malicious_confirmed
     total_corrupted_confirmed = num_corrupted_confirmed
     
-    return trust_vector
+    return trust_vector, updates_contributions
 
 
-def milestone(new_nn_params):
+def milestone(new_nn_params, epoch):
     global dag, central_node, longest_ppath, added_node_ids, step, last_node_prev_round, pos
     
     #CREATING MILESTONE
-    last_node_prev_round = None
     last_node = None
     for node_id in longest_ppath:
         if all(parent not in longest_ppath for parent in dag.graph.predecessors(node_id)):
@@ -203,13 +209,13 @@ def milestone(new_nn_params):
     if last_node is not None:
         last_node_prev_round = dag.nodes[last_node]
     #GIACOMO: prendere i new_nn_params e metterlo nella matrice del milestone
-    milestone = DAGNode.DAGNode(dag_utils.generate_data_matrix(malicious=False, corrupted=False), peer=central_node)
-    central_node.manual_add_node(milestone, [last_node_prev_round.id])
+    milestone = DAGNode.DAGNode(dag_utils.generate_data_matrix(malicious=False, corrupted=False), peer=central_node, epoch=epoch)
+    central_node.manual_add_node(new_node=milestone, selected_parents=[last_node_prev_round.id])
     longest_ppath.add(milestone.id)
-    print(longest_ppath)
-    print("NEW MILESTONE: " + str(last_node_prev_round.id))
+    print("NEW MILESTONE: " + str(milestone.id))
     print("\n\n")
     added_node_ids.append(node_id)
+    last_node_prev_round = milestone
     pos = nx.spring_layout(dag.graph, seed=42, pos=pos, fixed=list(pos.keys()))
     dag_utils.draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
     step+=1

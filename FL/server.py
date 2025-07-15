@@ -19,6 +19,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'DAG'))
 from DAG_functions import init_DAG
 from DAG_functions import get_trust_vector
+from DAG_functions import milestone
 
 
 def train_subset_of_clients(epoch, args, clients, poisoned_workers):
@@ -52,12 +53,27 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     for client_idx in random_workers:
         parameters_clients[client_idx] = clients[client_idx].get_nn_parameters()
     args.get_logger().info("Averaging client parameters")
-    parameters = [clients[client_idx].get_nn_parameters() for client_idx in random_workers]
-    trust_vector = get_trust_vector(parameters_clients, epoch)
+    #parameters = [clients[client_idx].get_nn_parameters() for client_idx in random_workers]
+    trust_vector, update_contributions = get_trust_vector(parameters_clients, epoch)
     #assicurarsi che trust-vector sia ordinato come i parametri
+    
+    # Extract trust values only for the selected workers in this round
+    ordered_parameters = []
+    ordered_trust_values = []
+    for client_idx in random_workers:
+        if(update_contributions[client_idx] != 0):
+            ordered_parameters.append(clients[client_idx].get_nn_parameters())
+            # Extract trust value for this specific client from the full trust_vector
+            ordered_trust_values.append(trust_vector[client_idx])
+        else:
+            args.get_logger().info(f"Client {client_idx} has no updates contribution, skipping.")
 
-    new_nn_params = average_nn_parameters(parameters, trust_vector)
-    #GIACOMO: PRENDERE NEW PARAMS E FARCI MILESTONE
+    args.get_logger().info("Selected workers: {}", str(random_workers))
+    args.get_logger().info("Corresponding trust values: {}", str(ordered_trust_values))
+    
+    new_nn_params = average_nn_parameters(ordered_parameters, ordered_trust_values)
+    #GIACOMO: creating a milestone with the new global model parameters
+    milestone(new_nn_params, epoch)
 
     for client in clients:
         args.get_logger().info("Updating parameters on client #{}", str(client.get_client_index()))
@@ -95,13 +111,39 @@ def run_exp(replacement_method, client_selection_strategy, idx):
     # Initialize logger
     handler = logger.add(log_files[0], enqueue=True)
 
-    #GIACOMO: Initialize DAG
-    X, R, num_malicious, malicious_indices = init_DAG()
-
+    # First, create a temporary args to get basic configuration
+    temp_args = Arguments(logger)
+    
     #TODO: mettere un numero <X di workers per round
     KWARGS = {
-        "NUM_WORKERS_PER_ROUND" : X-5
+        "NUM_WORKERS_PER_ROUND" : 5  # Will be updated after DAG initialization
     }
+
+    temp_args.set_round_worker_selection_strategy_kwargs(KWARGS)
+    temp_args.set_client_selection_strategy(client_selection_strategy)
+    temp_args.log()
+
+    train_data_loader = load_train_data_loader(logger, temp_args)
+    test_data_loader = load_test_data_loader(logger, temp_args)
+
+    # Distribute batches equal volume IID - using default number of workers for now
+    distributed_train_dataset = distribute_batches_equally(train_data_loader, temp_args.get_num_workers())
+    distributed_train_dataset = convert_distributed_data_into_numpy(distributed_train_dataset)
+
+    # Create initial clients to get their parameters
+    train_data_loaders = generate_data_loaders_from_distributed_dataset(distributed_train_dataset, temp_args.get_batch_size())
+    temp_clients = create_clients(temp_args, train_data_loaders, test_data_loader)
+    
+    # Extract initial parameters from all clients
+    initial_parameters = {}
+    for client in temp_clients:
+        initial_parameters[client.get_client_index()] = client.get_nn_parameters()
+    
+    #GIACOMO: Initialize DAG with initial client parameters
+    X, R, num_malicious, malicious_indices = init_DAG(initial_parameters)
+
+    # Now update the configuration with actual values from DAG
+    KWARGS["NUM_WORKERS_PER_ROUND"] = X-5
 
     args = Arguments(logger)
     args.set_model_save_path(models_folders[0])
@@ -112,10 +154,7 @@ def run_exp(replacement_method, client_selection_strategy, idx):
     args.set_client_selection_strategy(client_selection_strategy)
     args.log()
 
-    train_data_loader = load_train_data_loader(logger, args)
-    test_data_loader = load_test_data_loader(logger, args)
-
-    # Distribute batches equal volume IID
+    # Redistribute data with correct number of workers
     distributed_train_dataset = distribute_batches_equally(train_data_loader, args.get_num_workers())
     distributed_train_dataset = convert_distributed_data_into_numpy(distributed_train_dataset)
 

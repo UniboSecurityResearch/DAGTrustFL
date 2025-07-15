@@ -30,7 +30,6 @@ class Peer:
         # Logging info
         print(f"[{self.name}] Adding node {new_node.id[:6]}")
         for pid in selected_parents:
-            print(pid)
             cw = self.dag.nodes[pid].cw
             status = "(CONFIRMED)" if self.dag.is_confirmed(pid) else ""
             print(f"  ↳ parent {pid[:6]} | CW={cw} {status}")
