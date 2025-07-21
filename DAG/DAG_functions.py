@@ -13,10 +13,10 @@ import gif
 
 matplotlib.use('Qt5Agg')
 # Simulazione di un DAG con X peer, cada uno fa Y nodi
-X= 10  # Numero di peer
-R= 4  # Numero di round di FL
-malicious_percentage = 0.3  # Percentuale di peer malevoli
-corrupted_percentage = 0.2  # Percentuale di peer corrotti
+X= 5  # Numero di peer
+R= 50  # Numero di round di FL
+malicious_percentage = 0.34  # Percentuale di peer malevoli
+corrupted_percentage = 0  # Percentuale di peer corrotti
 
 trust_vector = [1] * X
 structural_consistencies = []
@@ -48,7 +48,10 @@ def init_DAG(initial_params):
     #print(initial_params[0])
     # Inizializza il DAG e il selettore di tip
     dag = DAG.DAG()
-    selector = TipSelectionAlgorithm.TrustInformedTipSelector()
+    selector = TipSelectionAlgorithm.TrustInformedTipSelector(
+        similarity_method='euclidean',
+        similarity_threshold=0.537608
+    )
 
     # Crea X peer
     peers = [Peer.Peer(dag, selector, name=f"Peer{i}", id=i) for i in range(X)]
@@ -111,9 +114,11 @@ def get_trust_vector(parameters_clients, epoch):
             if is_malicious:
                 # For malicious peers, we could potentially modify their parameters
                 # but let's use the actual parameters for now to test real detection
+                print("MALICIOUS")
                 pass
             if is_corrupted:
                 # For corrupted peers, same approach
+                print("CORRUPTED")
                 pass
                 
             node = DAGNode.DAGNode(actual_parameters, peer=peer, epoch=epoch)
@@ -129,19 +134,11 @@ def get_trust_vector(parameters_clients, epoch):
     
     old_path = set(longest_ppath)
     # Heaviest subgraph computations
-    longest_ppath = set()
     unconfirmed_tips = [tip for tip in dag.tips if not dag.is_confirmed(tip)]
-    for tip in unconfirmed_tips:
-        #Check past cone similarity
-        nodes_to_remove= selector.check_past_cone_similarity([tip], dag)
-        print("Evaluating longest path from tip: " + str(tip))
-        if(len(nodes_to_remove) == 0):
-            ppath = dag_utils.search_path_from_tip_to_lastroundFL(dag, tip, last_node_prev_round.id)
-            if len(ppath) > len(longest_ppath):
-                longest_ppath = ppath
-        else:
-            print("CORRUPTED")
-    longest_ppath = longest_ppath.union(old_path)
+    #TODO:
+    # compute 2 longest_paths, so that the milestone can connect to both
+    # and reduce drastically the probability of good nodes being removed
+    longest_ppath = compute_longest_path(dag, selector, unconfirmed_tips, last_node_prev_round, old_path)
     dag_utils.draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
     step += 1
 
@@ -155,8 +152,6 @@ def get_trust_vector(parameters_clients, epoch):
     print(f"Good nodes eliminated: {num_good_removed}")
     
     # Develop trust vector for each peer based on structural consistency and updates contributions
-    #TODO
-    #Fare in modo che controlli solo l'ultimo round del grafo, e non tutto il grafo!
     for i, peer in enumerate(peers):
         structural_consistency = 1  # Default to trust
         updates_contribution = 1  # Default to trust
@@ -220,6 +215,12 @@ def get_trust_vector(parameters_clients, epoch):
     total_good_removed += num_good_removed
     total_malicious_confirmed = num_malicious_confirmed
     total_corrupted_confirmed = num_corrupted_confirmed
+
+    if epoch == R:
+        print("*****END OF TRUST VECTOR COMPUTATION*****")
+        print("Total good nodes removed:", total_good_removed)
+        print("Total malicious nodes confirmed:", total_malicious_confirmed)
+        print("Total corrupted nodes confirmed:", total_corrupted_confirmed)
     
     return trust_vector, updates_contributions
 
@@ -248,3 +249,35 @@ def milestone(new_nn_params, epoch):
     dag_utils.draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
     step+=1
     return
+
+def compute_longest_path(dag, selector, unconfirmed_tips, last_node_prev_round, old_path):
+    """
+    Compute the longest path in the DAG by evaluating tips and checking for corrupted behavior.
+    
+    Args:
+        dag: The DAG instance
+        selector: The tip selection algorithm instance
+        unconfirmed_tips: List of unconfirmed tip nodes
+        last_node_prev_round: The last node from the previous round
+        old_path: Set of nodes from previous longest path
+        
+    Returns:
+        set: The longest path as a set of node IDs
+    """
+    longest_ppath = set()
+    
+    for tip in unconfirmed_tips:
+        # Check past cone similarity
+        nodes_to_remove = selector.check_past_cone_similarity([tip], dag)
+        print("Evaluating longest path from tip: " + str(tip))
+        if len(nodes_to_remove) == 0:
+            ppath = dag_utils.search_path_from_tip_to_lastroundFL(dag, tip, last_node_prev_round.id)
+            if len(ppath) > len(longest_ppath):
+                longest_ppath = ppath
+                print("Found new longest path from tip: " + str(tip))
+        else:
+            print("CORRUPTED")
+    
+    # Union with old path
+    longest_ppath = longest_ppath.union(old_path)
+    return longest_ppath

@@ -28,6 +28,8 @@ def draw_dag(dag, step, pos, folder="../DAG/frames", highlight_nodes=None):
                 node_colors.append("lightgreen")  # Verde chiaro per confermati ma corrotti
             elif getattr(node, "malicious", False):  # Malevolo ma confermato
                 node_colors.append("#FFA1A1")  # Rosso chiaro per highlight malevolo
+            elif node.peer.name == "CentralNode":  # Confermato
+                node_colors.append("gold")  # Oro per il nodo centrale
             else:
                 node_colors.append("limegreen")  # Verde per highlight
         else:
@@ -52,7 +54,7 @@ def draw_dag(dag, step, pos, folder="../DAG/frames", highlight_nodes=None):
         with_labels=False,
         node_size=2000,
         node_color=node_colors,
-        edge_color="gray",
+        edge_color="black",
         arrows=True
     )
     # Etichette: ID abbreviato + CW + parameter statistics + peer number, in grassetto
