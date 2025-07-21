@@ -1,0 +1,10 @@
+numpy
+torch
+torchvision
+matplotlib
+seaborn
+networkx
+loguru
+PyQt5
+pandas
+scikit-learn
