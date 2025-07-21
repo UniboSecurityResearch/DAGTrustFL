@@ -77,7 +77,6 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     '''
     
     trust_vector, update_contributions = get_trust_vector(parameters_clients, epoch)
-    #assicurarsi che trust-vector sia ordinato come i parametri
     
     # Extract trust values only for the selected workers in this round
     ordered_parameters = []

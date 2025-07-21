@@ -10,6 +10,8 @@ from PIL import Image
 import shutil
 import dag_utils
 import gif
+import csv
+import os
 
 matplotlib.use('Qt5Agg')
 # Simulazione di un DAG con X peer, cada uno fa Y nodi
@@ -41,6 +43,78 @@ total_good_removed = 0
 total_malicious_confirmed = 0
 total_corrupted_confirmed = 0
 pos = None
+csv_filename = None  # Nome del file CSV per salvare i dati
+
+
+def init_csv_logging(filename="dag_trust_analysis.csv"):
+    """Inizializza il file CSV per salvare i dati dei round."""
+    global csv_filename
+    csv_filename = filename
+    
+    # Crea l'header del CSV
+    headers = [
+        'Round', 'Total_Nodes', 'Total_Tips', 
+        'Good_Nodes_Removed_This_Round', 'Malicious_Nodes_Confirmed_This_Round', 
+        'Corrupted_Nodes_Confirmed_This_Round',
+        'Total_Good_Removed', 'Total_Malicious_Confirmed', 'Total_Corrupted_Confirmed'
+    ]
+    
+    # Aggiungi colonne per il trust vector e le metriche per ogni peer
+    for i in range(X):
+        headers.extend([
+            f'Peer_{i}_Trust', f'Peer_{i}_Structural_Consistency', 
+            f'Peer_{i}_Updates_Contribution', f'Peer_{i}_Is_Malicious', 
+            f'Peer_{i}_Is_Corrupted'
+        ])
+    
+    # Scrivi l'header
+    with open(csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(headers)
+    
+    print(f"CSV logging initialized: {csv_filename}")
+
+
+def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round, num_corrupted_confirmed_this_round):
+    """Salva i dati del round corrente nel file CSV."""
+    global csv_filename, dag, trust_vector, structural_consistencies, updates_contributions
+    global total_good_removed, total_malicious_confirmed, total_corrupted_confirmed, peers
+    
+    if csv_filename is None:
+        print("Warning: CSV logging not initialized. Call init_csv_logging() first.")
+        return
+    
+    # Prepara i dati base del round
+    row_data = [
+        epoch + 1,  # Round (1-indexed)
+        len(dag.nodes),  # Total nodes
+        len(dag.tips),   # Total tips
+        num_good_removed,  # Good nodes removed this round
+        num_malicious_confirmed_this_round,  # Malicious nodes confirmed this round
+        num_corrupted_confirmed_this_round,   # Corrupted nodes confirmed this round
+        total_good_removed,  # Total good removed
+        total_malicious_confirmed,  # Total malicious confirmed
+        total_corrupted_confirmed    # Total corrupted confirmed
+    ]
+    
+    # Aggiungi i dati per ogni peer
+    for i in range(X):
+        trust_val = trust_vector[i] if i < len(trust_vector) else 0.0
+        struct_consistency = structural_consistencies[i] if i < len(structural_consistencies) else 1.0
+        updates_contrib = updates_contributions[i] if i < len(updates_contributions) else 1.0
+        is_malicious = 1 if i in malicious_indices else 0
+        is_corrupted = 1 if i in corrupted_indices else 0
+        
+        row_data.extend([
+            trust_val, struct_consistency, updates_contrib, is_malicious, is_corrupted
+        ])
+    
+    # Scrivi i dati nel CSV
+    with open(csv_filename, 'a', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(row_data)
+    
+    print(f"Round {epoch + 1} data saved to {csv_filename}")
 
 
 def init_DAG(initial_params):
@@ -92,6 +166,10 @@ def init_DAG(initial_params):
     #second_node = DAGNode.DAGNode(np.zeros((3, 3)), peer=central_node)
     #dag.add_node(second_node, [])
     print("INITIALIZED GRAPH")
+    
+    # Inizializza il logging CSV
+    init_csv_logging()
+    
     return X,R,num_malicious,malicious_indices.tolist()
 
 
@@ -149,6 +227,10 @@ def get_trust_vector(parameters_clients, epoch):
     print(f"Malicious nodes confirmed: {num_malicious_confirmed - total_malicious_confirmed}")
     print(f"Corrupted nodes confirmed: {num_corrupted_confirmed - total_corrupted_confirmed}")
     print(f"Good nodes eliminated: {num_good_removed}")
+    
+    # Salva i dati prima del calcolo del trust vector
+    num_malicious_confirmed_this_round = num_malicious_confirmed - total_malicious_confirmed
+    num_corrupted_confirmed_this_round = num_corrupted_confirmed - total_corrupted_confirmed
     
     # Develop trust vector for each peer based on structural consistency and updates contributions
     for i, peer in enumerate(peers):
@@ -214,6 +296,9 @@ def get_trust_vector(parameters_clients, epoch):
     total_good_removed += num_good_removed
     total_malicious_confirmed = num_malicious_confirmed
     total_corrupted_confirmed = num_corrupted_confirmed
+
+    # Salva i dati del round nel CSV
+    save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round, num_corrupted_confirmed_this_round)
 
     if epoch == R:
         print("*****END OF TRUST VECTOR COMPUTATION*****")
