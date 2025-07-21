@@ -238,7 +238,7 @@ class OLD_MyCustomTipSelector(TipSelectionAlgorithm):
 class TrustInformedTipSelector(TipSelectionAlgorithm):
     #TODO:
     #mettere il similarity threshold variabile in base all'epoch
-    def __init__(self, max_depth=3, similarity_threshold=0.9990, cw_penalty_factor=0.05, similarity_method='euclidean'):
+    def __init__(self, max_depth=3, similarity_threshold=0.35, cw_penalty_factor=0.05, similarity_method='cosine'):
         self.max_depth = max_depth #chi, depth of the past cone to inspect
         self.similarity_threshold = similarity_threshold  # Optimized from extended FL testing
         self.cw_penalty_factor = cw_penalty_factor  # Factor to penalize high CW nodes
@@ -246,8 +246,8 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
 
     def cs_evaluate_similarity(self, node_id, dag: DAG, new_parameters):
         current_parameters = dag.nodes[node_id].data
-        return 1.0
-    
+        return parameter_utils.cos_sim_simple(current_parameters, new_parameters)
+
     def euclidean_distance(self, params1, params2):
         return parameter_utils.normalized_euclidean_proximity_parameters(params1, params2)
 
@@ -282,7 +282,7 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
             # Return a neutral score for incompatible data types
             return 0.5
         
-        sim = self.euclidean_distance(new_parameters, current_parameters)
+        sim = parameter_utils.cos_sim_simple(new_parameters, current_parameters)
         weighted_similarity = weight * sim * cw_penalty
         return weighted_similarity if not np.isnan(sim) else -1
     
@@ -316,7 +316,7 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
                             else:
                                 parent_parameters = dag.nodes[parent].data
                                 #sim = self.euclidean_distance(parent_parameters, current_parameters)
-                                sim = self.cs_evaluate_similarity(node_id=current, dag=dag, new_parameters=parent_parameters)
+                                sim = parameter_utils.cos_sim_simple(current_parameters,parent_parameters)
                                 #sim = self.cosine_similarity(current_parameters, parent_parameters)
                                 if not np.isnan(sim) and sim < self.similarity_threshold:
                                     if debug == 1:
@@ -349,6 +349,7 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
                 # Skip the central node, as it is not a peer and does not have parameters
                 #print("Parent node is CentralNode, skipping similarity check")
                 score = 1.0
+                print("DIOCAAAA")
             else:
                 # Evaluate similarity score for the tip
                 score = self.cs_evaluate_similarity(tip, dag, new_parameters)

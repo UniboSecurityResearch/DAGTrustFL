@@ -59,10 +59,10 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     #Saving parameters of clients in a dict for the graph
     parameters_clients = {}
     for client_idx in random_workers:
-        print(str(client_idx) + "\n")
         parameters_clients[client_idx] = clients[client_idx].get_nn_parameters()
     args.get_logger().info("Averaging client parameters")
     parameters = [clients[client_idx].get_nn_parameters() for client_idx in random_workers]
+    '''
     i=0
     j=0
     for parameter1 in parameters:
@@ -74,8 +74,8 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
             j+=1
         i+=1
         j=0
-
     '''
+    
     trust_vector, update_contributions = get_trust_vector(parameters_clients, epoch)
     #assicurarsi che trust-vector sia ordinato come i parametri
     
@@ -96,7 +96,6 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     new_nn_params = average_nn_parameters(ordered_parameters, ordered_trust_values)
     #GIACOMO: creating a milestone with the new global model parameters
     milestone(new_nn_params, epoch)
-    '''
     trust_vector = []
     for client_idx in random_workers:
         trust_vector.append(1.0)

@@ -49,8 +49,7 @@ def init_DAG(initial_params):
     # Inizializza il DAG e il selettore di tip
     dag = DAG.DAG()
     selector = TipSelectionAlgorithm.TrustInformedTipSelector(
-        similarity_method='euclidean',
-        similarity_threshold=0.537608
+        similarity_method='cosine',
     )
 
     # Crea X peer
