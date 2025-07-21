@@ -1,4 +1,5 @@
 from loguru import logger
+import numpy as np
 from federated_learning.arguments import Arguments
 from federated_learning.utils import generate_data_loaders_from_distributed_dataset
 from federated_learning.datasets.data_distribution import distribute_batches_equally
@@ -13,6 +14,7 @@ from federated_learning.utils import generate_experiment_ids
 from federated_learning.utils import convert_results_to_csv
 from client import Client
 
+
 # Import DAG modules from parent directory
 import sys
 import os
@@ -20,7 +22,12 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'DAG'))
 from DAG_functions import init_DAG
 from DAG_functions import get_trust_vector
 from DAG_functions import milestone
+from parameter_utils import cosine_similarity_defense_score
+from parameter_utils import cos_sim_simple
+from parameter_utils import flatten_parameters
 
+
+    
 
 def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     """
@@ -43,6 +50,7 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
         poisoned_workers,
         kwargs)
     logger.info("Selected workers for epoch #{}: {}", str(epoch), str(random_workers))
+    global_model = clients[0].get_nn_parameters()
 
     for client_idx in random_workers:
         args.get_logger().info("Training epoch #{} on client #{}", str(epoch), str(clients[client_idx].get_client_index()))
@@ -53,7 +61,21 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     for client_idx in random_workers:
         parameters_clients[client_idx] = clients[client_idx].get_nn_parameters()
     args.get_logger().info("Averaging client parameters")
-    #parameters = [clients[client_idx].get_nn_parameters() for client_idx in random_workers]
+    parameters = [clients[client_idx].get_nn_parameters() for client_idx in random_workers]
+    '''
+    i=0
+    j=0
+    for parameter1 in parameters:
+        for parameter2 in parameters:
+            score = cos_sim_simple(parameter1, parameter2)  # Example for two clients
+            if j in poisoned_workers:
+                print("POISONED")
+            print(f"\n\nCosine similarity score between client {i} and client {j}: {score}\n\n")
+            j+=1
+        i+=1
+        j=0
+    '''
+    
     trust_vector, update_contributions = get_trust_vector(parameters_clients, epoch)
     #assicurarsi che trust-vector sia ordinato come i parametri
     
@@ -74,7 +96,10 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     new_nn_params = average_nn_parameters(ordered_parameters, ordered_trust_values)
     #GIACOMO: creating a milestone with the new global model parameters
     milestone(new_nn_params, epoch)
-
+    trust_vector = []
+    for client_idx in random_workers:
+        trust_vector.append(1.0)
+    new_nn_params = average_nn_parameters(parameters, trust_vector)
     for client in clients:
         args.get_logger().info("Updating parameters on client #{}", str(client.get_client_index()))
         client.update_nn_parameters(new_nn_params)
@@ -143,7 +168,7 @@ def run_exp(replacement_method, client_selection_strategy, idx):
     X, R, num_malicious, malicious_indices = init_DAG(initial_parameters)
 
     # Now update the configuration with actual values from DAG
-    KWARGS["NUM_WORKERS_PER_ROUND"] = X-5
+    KWARGS["NUM_WORKERS_PER_ROUND"] = 5
 
     args = Arguments(logger)
     args.set_model_save_path(models_folders[0])

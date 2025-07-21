@@ -28,6 +28,8 @@ def draw_dag(dag, step, pos, folder="../DAG/frames", highlight_nodes=None):
                 node_colors.append("lightgreen")  # Verde chiaro per confermati ma corrotti
             elif getattr(node, "malicious", False):  # Malevolo ma confermato
                 node_colors.append("#FFA1A1")  # Rosso chiaro per highlight malevolo
+            elif node.peer.name == "CentralNode":  # Confermato
+                node_colors.append("gold")  # Oro per il nodo centrale
             else:
                 node_colors.append("limegreen")  # Verde per highlight
         else:
@@ -52,14 +54,30 @@ def draw_dag(dag, step, pos, folder="../DAG/frames", highlight_nodes=None):
         with_labels=False,
         node_size=2000,
         node_color=node_colors,
-        edge_color="gray",
+        edge_color="black",
         arrows=True
     )
-    # Etichette: ID abbreviato + CW + media matrice + peer number, in grassetto
+    # Etichette: ID abbreviato + CW + parameter statistics + peer number, in grassetto
     labels = {}
     for node_id in dag.graph.nodes:
         node = dag.nodes[node_id]
-        matrix_mean = np.mean(node.data)
+        
+        # Get parameter statistics (mean, norm, etc.)
+        if hasattr(node, 'get_parameter_statistics'):
+            param_stats = node.get_parameter_statistics()
+            param_mean = param_stats['mean']
+        else:
+            # Fallback for backward compatibility
+            if hasattr(node.data, 'flatten'):
+                param_mean = np.mean(node.data)
+            else:
+                # For parameter dict/OrderedDict
+                try:
+                    import parameter_utils
+                    flattened = parameter_utils.flatten_parameters(node.data)
+                    param_mean = np.mean(flattened) if len(flattened) > 0 else 0.0
+                except:
+                    param_mean = 0.0
         
         # Get peer information
         peer_info = ""
@@ -74,7 +92,7 @@ def draw_dag(dag, step, pos, folder="../DAG/frames", highlight_nodes=None):
                 else:
                     peer_info = f"\n{node.peer.name[:2]}"
         
-        labels[node_id] = f"{node_id[:4]}\nCW={node.cw}\nμ={matrix_mean:.2f}{peer_info}"
+        labels[node_id] = f"{node_id[:4]}\nCW={node.cw}\nμ={param_mean:.2f}{peer_info}"
 
     nx.draw_networkx_labels(
         dag.graph,
@@ -91,6 +109,10 @@ def draw_dag(dag, step, pos, folder="../DAG/frames", highlight_nodes=None):
 
 
 def generate_data_matrix(size=(3, 3), malicious=False, corrupted=False):
+    """
+    Legacy function for generating simple data matrices.
+    For neural network parameters, use parameter_utils.generate_random_parameters_like() instead.
+    """
     if malicious:
         return np.random.rand(*size) * 100
     elif corrupted:
