@@ -8,8 +8,10 @@ def average_nn_parameters(parameters, trust_vector):
     """
     #GIACOMO: MODIFIED TO BE A WEIGHTED AVERAGE BASED ON TRUST VECTOR
     new_params = {}
-    for name in parameters[0].keys():
-        new_params[name] = sum([param[name].data * trust_vector[i] for i, param in enumerate(parameters)]) / sum(trust_vector)
-        
+    if len(parameters) > 0:
+        for name in parameters[0].keys():
+            new_params[name] = sum([param[name].data * trust_vector[i] for i, param in enumerate(parameters)]) / sum(trust_vector)
+    else:
+        new_params=parameters
 
     return new_params

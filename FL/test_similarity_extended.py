@@ -37,7 +37,7 @@ from loguru import logger
 class FL_SimilarityTester:
     """Classe per testare la similitudine attraverso più round di FL."""
     
-    def __init__(self, num_workers=12, num_poisoned=4, num_epochs=20, workers_per_round=8):
+    def __init__(self, num_workers=10, num_poisoned=3, num_epochs=200, workers_per_round=8):
         self.num_workers = num_workers
         self.num_poisoned = num_poisoned
         self.num_epochs = num_epochs
@@ -279,8 +279,18 @@ class FL_SimilarityTester:
     
     def aggregate_and_update(self, parameters_dict, selected_workers):
         """Aggrega i parametri e aggiorna i clients."""
-        # Simple FedAvg per questo test
-        parameters_list = [parameters_dict[w] for w in selected_workers]
+        # Filter out poisoned workers from aggregation
+        clean_workers = [w for w in selected_workers if w not in self.poisoned_indices]
+        
+        if not clean_workers:
+            print("Warning: No clean workers selected for aggregation!")
+            # Fallback to all selected workers if no clean workers
+            clean_workers = selected_workers
+        
+        parameters_list = [parameters_dict[w] for w in clean_workers]
+        
+        print(f"Aggregating parameters from {len(clean_workers)} clean workers: {clean_workers}")
+        print(f"Excluding {len([w for w in selected_workers if w in self.poisoned_indices])} poisoned workers")
         
         # Pesi uguali per semplicità (in realtà dovresti usare trust weights)
         trust_weights = [1.0] * len(parameters_list)
@@ -666,9 +676,9 @@ class FL_SimilarityTester:
             threshold = latest_data['optimal_threshold']
             
             # Histograms
-            plt.hist(clean_sims, bins=20, alpha=0.7, color='green', 
+            plt.hist(clean_sims, bins=200, alpha=0.7, color='green', 
                     label=f'Clean-Clean (n={len(clean_sims)})', density=True)
-            plt.hist(poisoned_sims, bins=20, alpha=0.7, color='red', 
+            plt.hist(poisoned_sims, bins=200, alpha=0.7, color='red', 
                     label=f'Clean-Poisoned (n={len(poisoned_sims)})', density=True)
             
             # Threshold line
@@ -763,7 +773,7 @@ class FL_SimilarityTester:
             if len(df_temporal) > 1:
                 correlation = df_temporal['Epoch'].corr(df_temporal[column])
                 trend_slope = np.polyfit(df_temporal['Epoch'], df_temporal[column], 1)[0]
-                print(f"  {column:20}: Correlation with time = {correlation:+.4f}, Slope = {trend_slope:+.6f}")
+                print(f"  {column:200}: Correlation with time = {correlation:+.4f}, Slope = {trend_slope:+.6f}")
         
         # Stabilità del threshold
         threshold_std = df_temporal['Optimal_Threshold'].std()
@@ -1180,7 +1190,7 @@ def main():
     print("🚀 Starting Enhanced Cosine Similarity Analysis")
     print("="*80)
     print("Configuration:")
-    print("  - 20 epochs for comprehensive temporal analysis")
+    print("  - 200 epochs for comprehensive temporal analysis")
     print("  - Enhanced threshold detection with ROC analysis")
     print("  - Comprehensive visualizations and reporting")
     print("  - Detailed statistical analysis")
@@ -1190,7 +1200,7 @@ def main():
     tester = FL_SimilarityTester(
         num_workers=18,      # Più workers per test robusto
         num_poisoned=6,      # Più attackers per test realistico
-        num_epochs=20,       # 20 epoche come richiesto
+        num_epochs=200,       # 20 epoche come richiesto
         workers_per_round=12 # Più workers per round
     )
     

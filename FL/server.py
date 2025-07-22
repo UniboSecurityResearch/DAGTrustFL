@@ -25,9 +25,9 @@ from DAG_functions import milestone
 from parameter_utils import cosine_similarity_defense_score
 from parameter_utils import cos_sim_simple
 from parameter_utils import flatten_parameters
+r_filez = []
+w_filez = []
 
-
-    
 
 def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     """
@@ -119,13 +119,22 @@ def run_machine_learning(clients, args, poisoned_workers):
     """
     Complete machine learning over a series of clients.
     """
+    # Delete existing result files if they exist
+    if r_filez and os.path.exists(r_filez[0]):
+        os.remove(r_filez[0])
+    if w_filez and os.path.exists(w_filez[0]):
+        os.remove(w_filez[0])
+    
     epoch_test_set_results = []
     worker_selection = []
+    
     for epoch in range(1, args.get_num_epochs() + 1):
         results, workers_selected = train_subset_of_clients(epoch, args, clients, poisoned_workers)
 
         epoch_test_set_results.append(results)
         worker_selection.append(workers_selected)
+        save_results(convert_results_to_csv([results]), r_filez[0])
+        save_results([workers_selected], w_filez[0])
 
     return convert_results_to_csv(epoch_test_set_results), worker_selection
 
@@ -134,13 +143,16 @@ def run_exp(replacement_method, client_selection_strategy, idx):
 
     # Initialize logger
     handler = logger.add(log_files[0], enqueue=True)
-
+    global r_filez
+    r_filez = results_files
+    global w_filez
+    w_filez = worker_selections_files
     # First, create a temporary args to get basic configuration
     temp_args = Arguments(logger)
     
-    #TODO: mettere un numero <X di workers per round
+    #TODO: mettere un numero <=X di workers per round
     KWARGS = {
-        "NUM_WORKERS_PER_ROUND" : 5  # Will be updated after DAG initialization
+        "NUM_WORKERS_PER_ROUND" : 8  # Will be updated after DAG initialization
     }
 
     temp_args.set_round_worker_selection_strategy_kwargs(KWARGS)
@@ -167,7 +179,7 @@ def run_exp(replacement_method, client_selection_strategy, idx):
     X, R, num_malicious, malicious_indices = init_DAG(initial_parameters)
 
     # Now update the configuration with actual values from DAG
-    KWARGS["NUM_WORKERS_PER_ROUND"] = 5
+    KWARGS["NUM_WORKERS_PER_ROUND"] = 8
 
     args = Arguments(logger)
     args.set_model_save_path(models_folders[0])
@@ -192,7 +204,7 @@ def run_exp(replacement_method, client_selection_strategy, idx):
     clients = create_clients(args, train_data_loaders, test_data_loader)
 
     results, worker_selection = run_machine_learning(clients, args, poisoned_workers)
-    save_results(results, results_files[0])
-    save_results(worker_selection, worker_selections_files[0])
+    #save_results(results, results_files[0])
+    #save_results(worker_selection, worker_selections_files[0])
 
     logger.remove(handler)

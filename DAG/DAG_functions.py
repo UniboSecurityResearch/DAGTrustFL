@@ -13,11 +13,11 @@ import gif
 import csv
 import os
 
-matplotlib.use('Qt5Agg')
+#matplotlib.use('Qt5Agg')
 # Simulazione di un DAG con X peer, cada uno fa Y nodi
-X= 5  # Numero di peer
-R= 50  # Numero di round di FL
-malicious_percentage = 0.34  # Percentuale di peer malevoli
+X= 10  # Numero di peer
+R= 200  # Numero di round di FL
+malicious_percentage = 0.2  # Percentuale di peer malevoli
 corrupted_percentage = 0  # Percentuale di peer corrotti
 
 trust_vector = [1] * X
@@ -25,7 +25,7 @@ structural_consistencies = []
 updates_contributions = []
 upsilon_1 = 0.5  # Weight for structural consistency
 upsilon_2 = 0.5  # Weight for updates contributions
-lambda_ = 0.5  # Weight for influence of historical trust evaluations
+lambda_ = 0.7  # Weight for influence of historical trust evaluations
 dag = None
 selector = None
 peers = []
@@ -272,7 +272,7 @@ def get_trust_vector(parameters_clients, epoch):
             if not peer_has_node:
                 print(f"Peer {i} ({peer.name}): No node found in the graph for this FL round")
                 #The peer didn't participate in this round, so we assume update contributions is 0.5
-                updates_contribution = 0.5
+                updates_contribution = trust_vector[i] if i < len(trust_vector) else 0.5
         if i >= len(updates_contributions):
             updates_contributions.append(updates_contribution)
             structural_consistencies.append(structural_consistency)
@@ -299,12 +299,53 @@ def get_trust_vector(parameters_clients, epoch):
 
     # Salva i dati del round nel CSV
     save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round, num_corrupted_confirmed_this_round)
-
+    if epoch == R/2:
+        # Snellisci il grafo eliminando tutti i nodi fino all'ultima milestone
+        print(f"Pruning graph at epoch {epoch + 1} (R/2)")
+        
+        # Trova tutti i nodi da rimuovere (tutti tranne quelli dalla milestone in poi)
+        nodes_to_prune = []
+        milestone_found = False
+        
+        # Trova l'ultima milestone (dovrebbe essere last_node_prev_round)
+        if last_node_prev_round:
+            # Trova tutti i nodi che precedono l'ultima milestone
+            for node_id in list(dag.graph.nodes):
+                node = dag.nodes.get(node_id)
+                if node and node.id != last_node_prev_round.id:
+                    # Verifica se questo nodo è un predecessore dell'ultima milestone
+                    if node.epoch < last_node_prev_round.epoch:
+                        nodes_to_prune.append(node_id)
+        
+        # Rimuovi i nodi trovati
+        for node_id in nodes_to_prune:
+            if node_id in dag.graph.nodes:
+                dag.graph.remove_node(node_id)
+                dag.nodes.pop(node_id, None)
+                dag.tips.discard(node_id)
+                longest_ppath.discard(node_id)  # Remove from longest path set too
+        
+        print(f"Removed {len(nodes_to_prune)} nodes during graph pruning")
+        print(f"Remaining nodes: {len(dag.nodes)}")
+        
     if epoch == R:
         print("*****END OF TRUST VECTOR COMPUTATION*****")
         print("Total good nodes removed:", total_good_removed)
         print("Total malicious nodes confirmed:", total_malicious_confirmed)
         print("Total corrupted nodes confirmed:", total_corrupted_confirmed)
+    
+    # Update similarity threshold logarithmically
+    # From 0.35 at round 1 to 0.68 at round 200
+    min_threshold = 0.35
+    max_threshold = 0.68
+    current_round = epoch + 1
+    
+    # Logarithmic scaling: threshold = min + (max - min) * log(current_round) / log(R)
+    if current_round <= R:
+        threshold_progress = np.log(current_round) / np.log(R)
+        new_threshold = min_threshold + (max_threshold - min_threshold) * threshold_progress
+        selector.update_threshold(new_threshold)
+        print(f"Updated similarity threshold to: {new_threshold:.4f} (round {current_round})")
     
     return trust_vector, updates_contributions
 
@@ -315,9 +356,14 @@ def milestone(new_nn_params, epoch):
     #CREATING MILESTONE
     last_node = None
     for node_id in longest_ppath:
-        if all(parent not in longest_ppath for parent in dag.graph.predecessors(node_id)):
+        try:
+            if all(parent not in longest_ppath for parent in dag.graph.predecessors(node_id)):
+                last_node = node_id
+                break
+        except Exception as e:
+            print(f"Error accessing predecessors for node {node_id}: {e}")
             last_node = node_id
-            break
+            continue
     if last_node is not None:
         last_node_prev_round = dag.nodes[last_node]
     

@@ -238,15 +238,37 @@ class OLD_MyCustomTipSelector(TipSelectionAlgorithm):
 class TrustInformedTipSelector(TipSelectionAlgorithm):
     #TODO:
     #mettere il similarity threshold variabile in base all'epoch
-    def __init__(self, max_depth=3, similarity_threshold=0.35, cw_penalty_factor=0.05, similarity_method='cosine'):
+    def __init__(self, max_depth=3, similarity_threshold=0.35, cw_penalty_factor=0.2, similarity_method='cosine'):
         self.max_depth = max_depth #chi, depth of the past cone to inspect
         self.similarity_threshold = similarity_threshold  # Optimized from extended FL testing
         self.cw_penalty_factor = cw_penalty_factor  # Factor to penalize high CW nodes
         self.similarity_method = similarity_method  # Method for similarity calculation
 
+    def update_threshold(self, new_threshold):
+        """
+        Update the similarity threshold dynamically.
+        
+        :param new_threshold: New threshold value
+        :type new_threshold: float
+        """
+        self.similarity_threshold = new_threshold
+        print(f"Updated similarity threshold to {self.similarity_threshold}")
+
+    def get_threshold(self):
+        """
+        Get the current similarity threshold.
+        
+        :return: Current threshold value
+        :rtype: float
+        """
+        return self.similarity_threshold
+
     def cs_evaluate_similarity(self, node_id, dag: DAG, new_parameters):
         current_parameters = dag.nodes[node_id].data
-        return parameter_utils.cos_sim_simple(current_parameters, new_parameters)
+        if dag.nodes[node_id].peer.name == "CentralNode":
+            return 1.0 - (self.cw_penalty_factor * dag.nodes[node_id].cw)
+        else:
+            return (parameter_utils.cos_sim_simple(current_parameters, new_parameters) - (self.cw_penalty_factor * dag.nodes[node_id].cw))
 
     def euclidean_distance(self, params1, params2):
         return parameter_utils.normalized_euclidean_proximity_parameters(params1, params2)
@@ -345,14 +367,7 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
         scored = []
         selected = []
         for tip in candidate_tips:
-            if(dag.nodes[tip].peer.name == "CentralNode"):
-                # Skip the central node, as it is not a peer and does not have parameters
-                #print("Parent node is CentralNode, skipping similarity check")
-                score = 1.0
-                print("DIOCAAAA")
-            else:
-                # Evaluate similarity score for the tip
-                score = self.cs_evaluate_similarity(tip, dag, new_parameters)
+            score = self.cs_evaluate_similarity(tip, dag, new_parameters)
             #print(f"Tip: {tip}, Score: {score}")
             if score is not None:
                 scored.append((tip, score))
@@ -367,22 +382,20 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
             # Sort by descending score
             scored.sort(key=lambda x: x[1], reverse=True)
             print(f"Scored tips: {scored}")
-            repeat = True
-            while len(scored)> len(selected) and repeat:
-                # Step 3: select the best unconfirmed nodes, with score >= Epsilon
-                repeat = False
-                selected = [tip for tip, _ in scored if _ >= self.similarity_threshold][:2]
-                #Step 4: Examine the past cone of the selected nodes
-                # Check if any node in the past cone has low similarity with its parents
-                nodes_to_remove = self.check_past_cone_similarity(selected, dag)
-                # Remove nodes that failed the similarity check (with corrupted behavior)
-                for node_id in nodes_to_remove:
-                    if node_id in selected:
-                        selected.remove(node_id)
-                        repeat = True
-                        # Remove the tuple (node_id, score) from scored list
-                        scored = [(tip, score) for tip, score in scored if tip != node_id]
-                print(f"Selected after past cone check: {selected}")
+            
+            # Check past cone for all scored nodes and count violations
+            node_violations = {}
+            for tip, _ in scored:
+                nodes_to_remove = self.check_past_cone_similarity([tip], dag)
+                node_violations[tip] = len(nodes_to_remove)
+            
+            # Sort scored by: first by number of violations (ascending), then by score (descending)
+            scored.sort(key=lambda x: (node_violations[x[0]], -x[1]))
+            print(f"Scored tips after past cone analysis: {scored}")
+            
+            # Step 3: select the best nodes (those with fewest violations and highest scores)
+            selected = [tip for tip, _ in scored[:2]]
+            print(f"Selected after past cone check: {selected}")
         # Step 5: if less than 2, add fallback considering also confirmed nodes
         if len(selected) < 2:
             print(f"FALLBACK FROM CONFIRMED NODES {2 - len(selected)}")
@@ -395,11 +408,6 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
             for node in confirmed_nodes:
                 print(f"Checking confirmed node: {node}")
                 
-                # Skip nodes that are known to have incompatible data
-                if dag.nodes[node].peer.name == "CentralNode":
-                    print(f"  Skipping CentralNode {node}")
-                    continue
-                    
                 # Quick compatibility check before calling evaluate_similarity
                 try:
                     current_parameters = dag.nodes[node].data
@@ -447,5 +455,4 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
             selected += backup_nodes[:1 - len(selected)]
         print(f"Selected tips: {selected}")
         return selected[:2]
-    
-    
+

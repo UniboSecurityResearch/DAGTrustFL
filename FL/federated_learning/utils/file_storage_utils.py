@@ -1,5 +1,6 @@
 import csv
 import json
+import os
 
 def generate_json_repr_for_worker(worker_id, is_worker_poisoned, test_set_results):
     """
@@ -36,7 +37,8 @@ def save_results(results, filename):
     :param filename: File name to write results to
     :type filename: String
     """
-    with open(filename, 'w', newline='') as csvfile:
+    mode = 'w' if not os.path.exists(filename) else 'a'
+    with open(filename, mode, newline='') as csvfile:
         writer = csv.writer(csvfile, delimiter=',')
 
         for experiment in results:

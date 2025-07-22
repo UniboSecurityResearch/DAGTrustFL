@@ -21,4 +21,4 @@ def make_gif(frame_folder="../DAG/frames", output_gif="dag_evolution.gif", durat
         images[0].save(output_gif, save_all=True, append_images=images[1:], duration=duration, loop=0)
         print(f"GIF salvata come {output_gif}")
 
-make_gif()
+#make_gif()
