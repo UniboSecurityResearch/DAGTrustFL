@@ -142,6 +142,28 @@ def quick_analysis_pdf(csv_file="dag_trust_analysis.csv"):
                 status = "MALICIOSO" if i in malicious_peers else "BUONO"
                 trust_finale_text += f"• Peer {i} ({status}): {final_trust:.3f}\n"
             
+            # Analisi similarità se disponibile
+            similarity_text = ""
+            if 'Similarity_Threshold' in df.columns:
+                initial_threshold = df['Similarity_Threshold'].iloc[0]
+                final_threshold = df['Similarity_Threshold'].iloc[-1]
+                similarity_text += f"\nSIMILARITY ANALYSIS:\n"
+                similarity_text += f"• Threshold iniziale: {initial_threshold:.4f}\n"
+                similarity_text += f"• Threshold finale: {final_threshold:.4f}\n"
+                
+                if 'Mean_Similarity_Good' in df.columns and 'Mean_Similarity_Bad' in df.columns:
+                    final_sim_good = df['Mean_Similarity_Good'].iloc[-1] if not pd.isna(df['Mean_Similarity_Good'].iloc[-1]) else None
+                    final_sim_bad = df['Mean_Similarity_Bad'].iloc[-1] if not pd.isna(df['Mean_Similarity_Bad'].iloc[-1]) else None
+                    
+                    if final_sim_good is not None:
+                        similarity_text += f"• Similitudine media finale nodi buoni: {final_sim_good:.4f}\n"
+                    if final_sim_bad is not None:
+                        similarity_text += f"• Similitudine media finale nodi cattivi: {final_sim_bad:.4f}\n"
+                    
+                    if final_sim_good is not None and final_sim_bad is not None:
+                        gap = final_sim_good - final_sim_bad
+                        similarity_text += f"• Gap finale (buoni-cattivi): {gap:.4f}\n"
+            
             stats_text = f"""
 QUICK DAG TRUST ANALYSIS - RISULTATI
 ===================================
@@ -167,6 +189,7 @@ PERFORMANCE DETECTION:
 
 TRUST FINALE:
 {trust_finale_text}
+{similarity_text}
 
 INTERPRETAZIONE:
 {'✅ Sistema efficace!' if mal_detection_rate > 70 and false_positive_rate < 20 else '⚠️ Sistema da ottimizzare'}

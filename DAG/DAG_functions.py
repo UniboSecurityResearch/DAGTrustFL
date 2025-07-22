@@ -15,8 +15,8 @@ import os
 
 #matplotlib.use('Qt5Agg')
 # Simulazione di un DAG con X peer, cada uno fa Y nodi
-X= 10  # Numero di peer
-R= 200  # Numero di round di FL
+X= 5  # Numero di peer
+R= 10  # Numero di round di FL
 malicious_percentage = 0.2  # Percentuale di peer malevoli
 corrupted_percentage = 0  # Percentuale di peer corrotti
 
@@ -56,7 +56,8 @@ def init_csv_logging(filename="dag_trust_analysis.csv"):
         'Round', 'Total_Nodes', 'Total_Tips', 
         'Good_Nodes_Removed_This_Round', 'Malicious_Nodes_Confirmed_This_Round', 
         'Corrupted_Nodes_Confirmed_This_Round',
-        'Total_Good_Removed', 'Total_Malicious_Confirmed', 'Total_Corrupted_Confirmed'
+        'Total_Good_Removed', 'Total_Malicious_Confirmed', 'Total_Corrupted_Confirmed',
+        'Similarity_Threshold', 'Mean_Similarity_Good', 'Mean_Similarity_Bad'
     ]
     
     # Aggiungi colonne per il trust vector e le metriche per ogni peer
@@ -78,12 +79,38 @@ def init_csv_logging(filename="dag_trust_analysis.csv"):
 def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round, num_corrupted_confirmed_this_round):
     """Salva i dati del round corrente nel file CSV."""
     global csv_filename, dag, trust_vector, structural_consistencies, updates_contributions
-    global total_good_removed, total_malicious_confirmed, total_corrupted_confirmed, peers
-    
+    global total_good_removed, total_malicious_confirmed, total_corrupted_confirmed, peers, selector
+
     if csv_filename is None:
         print("Warning: CSV logging not initialized. Call init_csv_logging() first.")
         return
-    
+
+    # Calcola la soglia di similitudine attuale
+    similarity_threshold = selector.get_threshold()
+
+    # Calcola le similitudini medie dei nodi buoni e cattivi
+    good_similarities = []
+    bad_similarities = []
+    for i, peer in enumerate(peers):
+        # Considera solo i peer che hanno aggiunto un nodo in questo round
+        for node_id, node in dag.nodes.items():
+            if hasattr(node, 'peer') and node.peer == peer and node.epoch == epoch:
+                if i not in malicious_indices: 
+                    sim_g = []
+                    sim_b = []
+                    for node_id_other, node_other in dag.nodes.items():
+                        if hasattr(node_other, 'peer') and node_other.peer in peers and node_other.epoch == epoch and node_other.malicious == False: 
+                            # Calcola la similitudine rispetto gli altri nodi buoni del round (se esiste la funzione nel selettore)
+                            sim_g.append(selector.cs_evaluate_similarity(node_id, dag, node_other.data))
+                        elif hasattr(node_other, 'peer') and node_other.peer in peers and node_other.epoch == epoch and node_other.malicious:
+                            sim_b.append(selector.cs_evaluate_similarity(node_id, dag, node_other.data))
+                    good_similarities.append(np.mean(sim_g)) if sim_g else good_similarities.append(0)
+                    bad_similarities.append(np.mean(sim_b)) if sim_b else bad_similarities.append(0)
+
+
+    mean_sim_good = np.mean(good_similarities) if good_similarities else None
+    mean_sim_bad = np.mean(bad_similarities) if bad_similarities else None
+
     # Prepara i dati base del round
     row_data = [
         epoch + 1,  # Round (1-indexed)
@@ -94,7 +121,8 @@ def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round,
         num_corrupted_confirmed_this_round,   # Corrupted nodes confirmed this round
         total_good_removed,  # Total good removed
         total_malicious_confirmed,  # Total malicious confirmed
-        total_corrupted_confirmed    # Total corrupted confirmed
+        total_corrupted_confirmed,   # Total corrupted confirmed
+        similarity_threshold, mean_sim_good, mean_sim_bad
     ]
     
     # Aggiungi i dati per ogni peer

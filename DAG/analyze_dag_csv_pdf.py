@@ -256,7 +256,92 @@ class DAGAnalyzer:
             pdf.savefig(fig, bbox_inches='tight')
             plt.close()
             
-            # 4. Detection Analysis
+            # 4. Similarity Threshold Analysis
+            print("   📐 Similarity Threshold Analysis...")
+            fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
+            
+            # Evoluzione threshold
+            if 'Similarity_Threshold' in self.df.columns:
+                ax1.plot(rounds, self.df['Similarity_Threshold'], 'blue', linewidth=3, marker='o', label='Threshold')
+                ax1.set_xlabel('Round')
+                ax1.set_ylabel('Similarity Threshold')
+                ax1.set_title('🎯 Evoluzione Threshold di Similitudine')
+                ax1.grid(True, alpha=0.3)
+                ax1.legend()
+                
+                # Aggiungi linee di riferimento
+                ax1.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5, label='Soglia 0.5')
+                ax1.legend()
+            
+            # Similitudini medie buoni vs cattivi
+            if 'Mean_Similarity_Good' in self.df.columns and 'Mean_Similarity_Bad' in self.df.columns:
+                # Rimuovi valori None/NaN
+                good_sim = self.df['Mean_Similarity_Good'].dropna()
+                bad_sim = self.df['Mean_Similarity_Bad'].dropna()
+                good_rounds = rounds[self.df['Mean_Similarity_Good'].notna()]
+                bad_rounds = rounds[self.df['Mean_Similarity_Bad'].notna()]
+                
+                ax2.plot(good_rounds, good_sim, 'green', linewidth=3, marker='o', label='Nodi Buoni', alpha=0.8)
+                ax2.plot(bad_rounds, bad_sim, 'red', linewidth=3, marker='s', label='Nodi Maliciosi/Corrotti', alpha=0.8)
+                
+                # Threshold come riferimento
+                if 'Similarity_Threshold' in self.df.columns:
+                    ax2.plot(rounds, self.df['Similarity_Threshold'], 'blue', linewidth=2, linestyle='--', 
+                            alpha=0.7, label='Threshold')
+                
+                ax2.set_xlabel('Round')
+                ax2.set_ylabel('Similarity Value')
+                ax2.set_title('📊 Similitudini Medie: Buoni vs Cattivi')
+                ax2.legend()
+                ax2.grid(True, alpha=0.3)
+                ax2.set_ylim(0, 1)
+            
+            # Distribuzione finale similitudini
+            if 'Mean_Similarity_Good' in self.df.columns and 'Mean_Similarity_Bad' in self.df.columns:
+                final_sim_good = self.df['Mean_Similarity_Good'].dropna()
+                final_sim_bad = self.df['Mean_Similarity_Bad'].dropna()
+                
+                if len(final_sim_good) > 0 and len(final_sim_bad) > 0:
+                    data_sim = [final_sim_good.values, final_sim_bad.values]
+                    bp_sim = ax3.boxplot(data_sim, labels=['Nodi Buoni', 'Nodi Maliciosi'], patch_artist=True)
+                    bp_sim['boxes'][0].set_facecolor('green')
+                    bp_sim['boxes'][0].set_alpha(0.7)
+                    bp_sim['boxes'][1].set_facecolor('red')
+                    bp_sim['boxes'][1].set_alpha(0.7)
+                
+                ax3.set_ylabel('Similarity Values')
+                ax3.set_title('📈 Distribuzione Similitudini')
+                ax3.grid(True, alpha=0.3)
+            
+            # Gap analysis - differenza tra similitudini buoni e cattivi
+            if 'Mean_Similarity_Good' in self.df.columns and 'Mean_Similarity_Bad' in self.df.columns:
+                # Calcola differenza dove entrambi i valori esistono
+                valid_mask = self.df['Mean_Similarity_Good'].notna() & self.df['Mean_Similarity_Bad'].notna()
+                if valid_mask.sum() > 0:
+                    gap = self.df.loc[valid_mask, 'Mean_Similarity_Good'] - self.df.loc[valid_mask, 'Mean_Similarity_Bad']
+                    gap_rounds = rounds[valid_mask]
+                    
+                    ax4.plot(gap_rounds, gap, 'purple', linewidth=3, marker='d', label='Gap Similitudini')
+                    ax4.axhline(y=0, color='gray', linestyle='-', alpha=0.5)
+                    ax4.set_xlabel('Round')
+                    ax4.set_ylabel('Gap (Buoni - Cattivi)')
+                    ax4.set_title('🔍 Gap Similitudini (Buoni - Cattivi)')
+                    ax4.grid(True, alpha=0.3)
+                    ax4.legend()
+                    
+                    # Riempi aree positive e negative
+                    ax4.fill_between(gap_rounds, gap, 0, where=(gap >= 0), alpha=0.3, color='green', 
+                                    label='Buoni > Cattivi')
+                    ax4.fill_between(gap_rounds, gap, 0, where=(gap < 0), alpha=0.3, color='red', 
+                                    label='Cattivi > Buoni')
+                    ax4.legend()
+            
+            plt.suptitle('Similarity Threshold & Analysis', fontsize=16, fontweight='bold')
+            plt.tight_layout()
+            pdf.savefig(fig, bbox_inches='tight')
+            plt.close()
+            
+            # 5. Detection Analysis
             print("   🎯 Detection Analysis...")
             fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
             
@@ -333,7 +418,7 @@ class DAGAnalyzer:
             pdf.savefig(fig, bbox_inches='tight')
             plt.close()
             
-            # 5. Summary Statistics Page
+            # 6. Summary Statistics Page
             print("   📋 Summary Statistics...")
             fig, ax = plt.subplots(figsize=(11, 8.5))
             ax.axis('off')
@@ -354,6 +439,28 @@ class DAGAnalyzer:
             total_mal_confirmed = self.df['Total_Malicious_Confirmed'].iloc[-1]
             total_cor_confirmed = self.df['Total_Corrupted_Confirmed'].iloc[-1]
             total_good_removed = self.df['Total_Good_Removed'].iloc[-1]
+            
+            # Statistiche similarità
+            similarity_stats = ""
+            if 'Similarity_Threshold' in self.df.columns:
+                initial_threshold = self.df['Similarity_Threshold'].iloc[0]
+                final_threshold = self.df['Similarity_Threshold'].iloc[-1]
+                similarity_stats += f"\nSIMILARITY ANALYSIS:\n"
+                similarity_stats += f"• Threshold iniziale: {initial_threshold:.4f}\n"
+                similarity_stats += f"• Threshold finale: {final_threshold:.4f}\n"
+                
+                if 'Mean_Similarity_Good' in self.df.columns and 'Mean_Similarity_Bad' in self.df.columns:
+                    final_sim_good = self.df['Mean_Similarity_Good'].iloc[-1]
+                    final_sim_bad = self.df['Mean_Similarity_Bad'].iloc[-1]
+                    
+                    if pd.notna(final_sim_good):
+                        similarity_stats += f"• Similitudine media finale nodi buoni: {final_sim_good:.4f}\n"
+                    if pd.notna(final_sim_bad):
+                        similarity_stats += f"• Similitudine media finale nodi cattivi: {final_sim_bad:.4f}\n"
+                    
+                    if pd.notna(final_sim_good) and pd.notna(final_sim_bad):
+                        gap = final_sim_good - final_sim_bad
+                        similarity_stats += f"• Gap finale (buoni-cattivi): {gap:.4f}\n"
             
             stats_text = f"""
 DAG TRUST SYSTEM - STATISTICHE RIASSUNTIVE
@@ -387,6 +494,9 @@ DETECTION:
                 false_positive_rate = (total_good_removed / good_peers) * 100
                 stats_text += f"• Tasso falsi positivi: {false_positive_rate:.1f}%\n"
             
+            # Aggiungi statistiche similarità
+            stats_text += similarity_stats
+            
             stats_text += f"\nTRUST FINALE:\n"
             for i in range(self.num_peers):
                 trust_col = f'Peer_{i}_Trust'
@@ -404,7 +514,7 @@ DETECTION:
             stats_text += f"\nReport generato: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             stats_text += f"\nFile CSV: {self.csv_file}"
             
-            ax.text(0.05, 0.95, stats_text, transform=ax.transAxes, fontsize=11, 
+            ax.text(0.05, 0.95, stats_text, transform=ax.transAxes, fontsize=10, 
                    verticalalignment='top', fontfamily='monospace',
                    bbox=dict(boxstyle='round,pad=1', facecolor='lightblue', alpha=0.8))
             
@@ -483,6 +593,34 @@ DETECTION:
                 status = "🟢"
             
             print(f"   • Peer {i} {status}: {final_trust:.3f}")
+        
+        # Analisi similarità
+        if 'Similarity_Threshold' in self.df.columns:
+            print(f"\n📐 SIMILARITY ANALYSIS:")
+            initial_threshold = self.df['Similarity_Threshold'].iloc[0]
+            final_threshold = self.df['Similarity_Threshold'].iloc[-1]
+            print(f"   • Threshold iniziale: {initial_threshold:.4f}")
+            print(f"   • Threshold finale: {final_threshold:.4f}")
+            print(f"   • Incremento threshold: {final_threshold - initial_threshold:.4f}")
+            
+            if 'Mean_Similarity_Good' in self.df.columns and 'Mean_Similarity_Bad' in self.df.columns:
+                final_sim_good = self.df['Mean_Similarity_Good'].iloc[-1]
+                final_sim_bad = self.df['Mean_Similarity_Bad'].iloc[-1]
+                
+                if pd.notna(final_sim_good):
+                    print(f"   • Similitudine media finale nodi buoni: {final_sim_good:.4f}")
+                if pd.notna(final_sim_bad):
+                    print(f"   • Similitudine media finale nodi cattivi: {final_sim_bad:.4f}")
+                
+                if pd.notna(final_sim_good) and pd.notna(final_sim_bad):
+                    gap = final_sim_good - final_sim_bad
+                    print(f"   • Gap finale (buoni-cattivi): {gap:.4f}")
+                    if gap > 0:
+                        print(f"   ✅ I nodi buoni hanno similitudine più alta")
+                    elif gap < 0:
+                        print(f"   ⚠️ I nodi cattivi hanno similitudine più alta")
+                    else:
+                        print(f"   ⚪ Similitudini identiche")
         
         print("\n" + "="*60)
     
