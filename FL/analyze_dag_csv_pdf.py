@@ -95,27 +95,41 @@ class DAGAnalyzer:
             ax1.legend()
             ax1.grid(True, alpha=0.3)
             
-            ax2.bar(rounds, self.df['Good_Nodes_Removed_This_Round'], alpha=0.7, color='orange', label='Nodi Buoni Rimossi')
-            ax2.bar(rounds, self.df['Malicious_Nodes_Confirmed_This_Round'], alpha=0.7, color='red', label='Nodi Maliciosi Confermati')
-            ax2.bar(rounds, self.df['Corrupted_Nodes_Confirmed_This_Round'], alpha=0.7, color='purple', label='Nodi Corrotti Confermati')
+            # Filtra valori negativi per evitare confusione visiva
+            good_removed = self.df['Good_Nodes_Removed_This_Round'].clip(lower=0)
+            malicious_confirmed = self.df['Malicious_Nodes_Confirmed_This_Round'].clip(lower=0)
+            corrupted_confirmed = self.df['Corrupted_Nodes_Confirmed_This_Round'].clip(lower=0)
+            
+            ax2.bar(rounds, good_removed, alpha=0.7, color='orange', label='Nodi Buoni Rimossi')
+            ax2.bar(rounds, malicious_confirmed, alpha=0.7, color='red', label='Nodi Maliciosi Confermati')
+            ax2.bar(rounds, corrupted_confirmed, alpha=0.7, color='purple', label='Nodi Corrotti Confermati')
             ax2.set_xlabel('Round')
             ax2.set_ylabel('Nodi per Round')
             ax2.set_title('📊 Nodi Rimossi/Confermati per Round')
             ax2.legend()
             ax2.grid(True, alpha=0.3)
+            ax2.set_ylim(bottom=0)  # Assicura che l'asse Y parta da 0
             
-            ax3.plot(rounds, self.df['Total_Good_Removed'], 'orange', linewidth=3, label='Tot. Buoni Rimossi')
-            ax3.plot(rounds, self.df['Total_Malicious_Confirmed'], 'red', linewidth=3, label='Tot. Maliciosi Confermati')
-            ax3.plot(rounds, self.df['Total_Corrupted_Confirmed'], 'purple', linewidth=3, label='Tot. Corrotti Confermati')
+            # Filtra valori negativi per i totali cumulativi
+            total_good_removed = self.df['Total_Good_Removed'].clip(lower=0)
+            total_malicious_confirmed = self.df['Total_Malicious_Confirmed'].clip(lower=0)
+            total_corrupted_confirmed = self.df['Total_Corrupted_Confirmed'].clip(lower=0)
+            
+            ax3.plot(rounds, total_good_removed, 'orange', linewidth=3, label='Tot. Buoni Rimossi')
+            ax3.plot(rounds, total_malicious_confirmed, 'red', linewidth=3, label='Tot. Maliciosi Confermati')
+            ax3.plot(rounds, total_corrupted_confirmed, 'purple', linewidth=3, label='Tot. Corrotti Confermati')
             ax3.set_xlabel('Round')
             ax3.set_ylabel('Totale Cumulativo')
             ax3.set_title('📈 Evoluzione Cumulativa')
             ax3.legend()
             ax3.grid(True, alpha=0.3)
+            ax3.set_ylim(bottom=0)  # Assicura che l'asse Y parta da 0
             
-            if self.df['Total_Malicious_Confirmed'].max() > 0:
-                malicious_detection_rate = (self.df['Total_Malicious_Confirmed'] / 
-                                          (self.df['Total_Malicious_Confirmed'] + self.df['Total_Good_Removed']) * 100)
+            if total_malicious_confirmed.max() > 0:
+                # Evita divisione per zero e valori negativi
+                denominator = total_malicious_confirmed + total_good_removed
+                denominator = denominator.replace(0, 1)  # Evita divisione per zero
+                malicious_detection_rate = (total_malicious_confirmed / denominator * 100).clip(lower=0, upper=100)
                 ax4.plot(rounds, malicious_detection_rate, 'green', linewidth=3, marker='o')
                 ax4.set_xlabel('Round')
                 ax4.set_ylabel('Tasso di Detection (%)')
@@ -390,11 +404,13 @@ class DAGAnalyzer:
                                 if self.df[f'Peer_{i}_Is_Corrupted'].iloc[0] == 1)
             
             if total_malicious > 0:
-                detection_rate_mal = (self.df['Total_Malicious_Confirmed'] / total_malicious) * 100
+                # Filtra valori negativi e limita a 0-100%
+                detection_rate_mal = ((self.df['Total_Malicious_Confirmed'].clip(lower=0) / total_malicious) * 100).clip(upper=100)
                 ax1.plot(rounds, detection_rate_mal, 'red', linewidth=3, marker='o', label='Maliciosi')
             
             if total_corrupted > 0:
-                detection_rate_cor = (self.df['Total_Corrupted_Confirmed'] / total_corrupted) * 100
+                # Filtra valori negativi e limita a 0-100%
+                detection_rate_cor = ((self.df['Total_Corrupted_Confirmed'].clip(lower=0) / total_corrupted) * 100).clip(upper=100)
                 ax1.plot(rounds, detection_rate_cor, 'purple', linewidth=3, marker='s', label='Corrotti')
             
             ax1.set_xlabel('Round')
@@ -404,14 +420,16 @@ class DAGAnalyzer:
             ax1.grid(True, alpha=0.3)
             ax1.set_ylim(0, 105)
             
-            # Falsi positivi
-            false_positive_rate = (self.df['Total_Good_Removed'] / 
-                                 (self.num_peers - total_malicious - total_corrupted)) * 100
-            ax2.plot(rounds, false_positive_rate, 'orange', linewidth=3, marker='^')
+            # Falsi positivi - filtra valori negativi
+            good_peers_count = self.num_peers - total_malicious - total_corrupted
+            if good_peers_count > 0:
+                false_positive_rate = ((self.df['Total_Good_Removed'].clip(lower=0) / good_peers_count) * 100).clip(upper=100)
+                ax2.plot(rounds, false_positive_rate, 'orange', linewidth=3, marker='^')
             ax2.set_xlabel('Round')
             ax2.set_ylabel('Falsi Positivi (%)')
             ax2.set_title('Tasso di Falsi Positivi')
             ax2.grid(True, alpha=0.3)
+            ax2.set_ylim(bottom=0)  # Assicura che l'asse Y parta da 0
             
             # Trust finale - distribuzione
             final_trust_good = []
@@ -443,14 +461,18 @@ class DAGAnalyzer:
             ax3.set_title('Distribuzione Trust Finale')
             ax3.grid(True, alpha=0.3)
             
-            # Timeline eventi
-            ax4.bar(rounds, self.df['Good_Nodes_Removed_This_Round'], color='orange', alpha=0.6, label='Buoni Rimossi')
-            ax4.bar(rounds, self.df['Malicious_Nodes_Confirmed_This_Round'], color='red', alpha=0.8, label='Maliciosi Confermati')
+            # Timeline eventi - filtra valori negativi
+            good_removed_timeline = self.df['Good_Nodes_Removed_This_Round'].clip(lower=0)
+            malicious_confirmed_timeline = self.df['Malicious_Nodes_Confirmed_This_Round'].clip(lower=0)
+            
+            ax4.bar(rounds, good_removed_timeline, color='orange', alpha=0.6, label='Buoni Rimossi')
+            ax4.bar(rounds, malicious_confirmed_timeline, color='red', alpha=0.8, label='Maliciosi Confermati')
             ax4.set_xlabel('Round')
             ax4.set_ylabel('Numero di Nodi')
             ax4.set_title('Timeline Eventi')
             ax4.legend()
             ax4.grid(True, alpha=0.3)
+            ax4.set_ylim(bottom=0)  # Assicura che l'asse Y parta da 0
             
             plt.suptitle('Detection Analysis', fontsize=16, fontweight='bold')
             plt.tight_layout()
@@ -475,9 +497,10 @@ class DAGAnalyzer:
                 if self.df[f'Peer_{i}_Is_Corrupted'].iloc[0] == 1:
                     corrupted_peers.append(i)
             
-            total_mal_confirmed = self.df['Total_Malicious_Confirmed'].iloc[-1]
-            total_cor_confirmed = self.df['Total_Corrupted_Confirmed'].iloc[-1]
-            total_good_removed = self.df['Total_Good_Removed'].iloc[-1]
+            # Filtra valori negativi per le statistiche finali
+            total_mal_confirmed = max(0, self.df['Total_Malicious_Confirmed'].iloc[-1])
+            total_cor_confirmed = max(0, self.df['Total_Corrupted_Confirmed'].iloc[-1])
+            total_good_removed = max(0, self.df['Total_Good_Removed'].iloc[-1])
             
             # Statistiche similarità
             similarity_stats = ""
@@ -593,10 +616,10 @@ DETECTION:
         print(f"\n🔴 PEERS MALICIOSI: {malicious_peers}")
         print(f"🟣 PEERS CORROTTI: {corrupted_peers}")
         
-        # Statistiche detection
-        total_mal_confirmed = self.df['Total_Malicious_Confirmed'].iloc[-1]
-        total_cor_confirmed = self.df['Total_Corrupted_Confirmed'].iloc[-1]
-        total_good_removed = self.df['Total_Good_Removed'].iloc[-1]
+        # Statistiche detection - filtra valori negativi
+        total_mal_confirmed = max(0, self.df['Total_Malicious_Confirmed'].iloc[-1])
+        total_cor_confirmed = max(0, self.df['Total_Corrupted_Confirmed'].iloc[-1])
+        total_good_removed = max(0, self.df['Total_Good_Removed'].iloc[-1])
         
         print(f"\n🎯 DETECTION:")
         print(f"   • Nodi maliciosi confermati: {total_mal_confirmed}")

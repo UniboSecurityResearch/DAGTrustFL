@@ -78,8 +78,6 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     
     trust_vector, update_contributions = get_trust_vector(parameters_clients, epoch)
     
-    trust_vector = [1,1,1,1,1]
-    update_contributions = [1,1,1,1,1]
 
 
     # Extract trust values only for the selected workers in this round

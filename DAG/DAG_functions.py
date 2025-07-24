@@ -16,10 +16,10 @@ import os
 
 #matplotlib.use('Qt5Agg')
 # Simulazione di un DAG con X peer, cada uno fa Y nodi
-X= 5  # Numero di peer
-R= 50  # Numero di round di FL
+X= 10  # Numero di peer
+R= 200  # Numero di round di FL
 malicious_percentage = 0.2  # Percentuale di peer malevoli
-corrupted_percentage = 0  # Percentuale di peer corrotti
+corrupted_percentage = 0.2  # Percentuale di peer corrotti
 
 trust_vector = [1] * X
 structural_consistencies = []
@@ -97,22 +97,22 @@ def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round,
     for node_str in dag.nodes:
         node = dag.nodes[node_str]
         if node.peer.malicious == False and node.epoch == epoch:
-            print("NODO BUONO:", node.id[:6], "DEL PEER", node.peer.id)
+            #print("NODO BUONO:", node.id[:6], "DEL PEER", node.peer.id)
             sim_g = []
             sim_b = []
             for node_other_str in dag.nodes:
                 node_other = dag.nodes[node_other_str]
                 if node_other.epoch == epoch:
-                    print("CONFRONTA CON:", node_other.id[:6], "DEL PEER", node_other.peer.id)
+                    #print("CONFRONTA CON:", node_other.id[:6], "DEL PEER", node_other.peer.id)
                     if node_other.malicious == False:
                         # Calcola la similitudine rispetto gli altri nodi buoni del round (se esiste la funzione nel selettore)
                         #sim_g.append(selector.cs_evaluate_similarity(node.id, dag, node_other.data))
                         sim_g.append(parameter_utils.cos_sim_simple(node.data, node_other.data))
-                        print("Peer numero", node.peer.id, "ha similitudini buone:", sim_g)
+                        #print("Peer numero", node.peer.id, "ha similitudini buone:", sim_g)
                     else:
                         # Calcola la similitudine rispetto agli altri nodi malevoli del round
                         sim_b.append(parameter_utils.cos_sim_simple(node.data, node_other.data))
-                        print("Peer numero", node.peer.id, "ha similitudini cattive:", sim_b)
+                        #print("Peer numero", node.peer.id, "ha similitudini cattive:", sim_b)
             #print("Peer numero", node.peer.id, "ha similitudini buone:", sim_g, "e cattive:", sim_b)
             good_similarities.append(np.mean(sim_g)) if sim_g else good_similarities.append(0)
             bad_similarities.append(np.mean(sim_b)) if sim_b else bad_similarities.append(0)
@@ -122,6 +122,9 @@ def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round,
 
     mean_sim_good = np.mean(good_similarities) if good_similarities else None
     mean_sim_bad = np.mean(bad_similarities) if bad_similarities else None
+    if mean_sim_bad > 0.001 and epoch > 3:
+        selector.update_threshold(np.mean([mean_sim_good,mean_sim_bad]))
+    print(f"Updated similarity threshold to: {selector.get_threshold():.4f}")
 
     # Prepara i dati base del round
     row_data = [
@@ -242,6 +245,7 @@ def get_trust_vector(parameters_clients, epoch):
             node.malicious = is_malicious
             node.corrupted = is_corrupted
             node_id = peer.add_node(node)
+            #TODO: aggiornare all'eliminazione dei nodi (heaviest graph o prune) questa lista added_node_ids?
             added_node_ids.append(node_id)
             pos = nx.spring_layout(dag.graph, seed=42, pos=pos, fixed=list(pos.keys()))
             dag_utils.draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
@@ -251,7 +255,7 @@ def get_trust_vector(parameters_clients, epoch):
     
     old_path = set(longest_ppath)
     # Heaviest subgraph computations
-    unconfirmed_tips = [tip for tip in dag.tips if not dag.is_confirmed(tip)]
+    unconfirmed_tips = [tip for tip in dag.nodes if not dag.is_confirmed(tip)]
     #TODO:
     # compute 2 longest_paths, so that the milestone can connect to both
     # and reduce drastically the probability of good nodes being removed
@@ -339,7 +343,7 @@ def get_trust_vector(parameters_clients, epoch):
     total_malicious_confirmed = num_malicious_confirmed
     total_corrupted_confirmed = num_corrupted_confirmed
     
-    if epoch == R/2:
+    if ((R/8)%epoch) == 0:
         # Snellisci il grafo eliminando tutti i nodi fino all'ultima milestone
         print(f"Pruning graph at epoch {epoch + 1} (R/2)")
         
@@ -374,29 +378,38 @@ def get_trust_vector(parameters_clients, epoch):
         print("Total malicious nodes confirmed:", total_malicious_confirmed)
         print("Total corrupted nodes confirmed:", total_corrupted_confirmed)
     
-    # Update similarity threshold logarithmically
-    # From 0.33 at round 1 to 0.68 at round 200 (sempre basato su 200 round come riferimento)
-    # Crescita molto più lenta usando logaritmo con base più alta e smorzamento
-    min_threshold = 0.33
-    max_threshold = 0.68
-    target_rounds = 200  # Sempre basato su 200 round come riferimento
+    """
+    # Update similarity threshold with piecewise linear growth
+    # Linear growth until round 35, then slower linear growth
+    min_threshold = 0.30
+    max_threshold = 0.55
+    breakpoint_round = 35  # Switch point for different growth rates
+    target_rounds = 200  # Always based on 200 rounds as reference
     current_round = epoch + 1
     
-    # Crescita logaritmica molto più lenta: usiamo log con base più alta e un esponente frazionario
-    # Formula: threshold = min + (max - min) * (log(current_round + 10) / log(target_rounds + 10))^0.6
-    # Il +10 rallenta la crescita iniziale, l'esponente 0.6 rallenta la crescita complessiva
     if current_round <= target_rounds:
-        # Crescita molto graduale con smorzamento
-        base_progress = np.log(current_round + 10) / np.log(target_rounds + 10)
-        threshold_progress = np.power(base_progress, 0.6)  # Esponente < 1 per crescita più lenta
-        new_threshold = min_threshold + (max_threshold - min_threshold) * threshold_progress
+        if current_round <= breakpoint_round:
+            # First segment: linear growth from 0.30 to intermediate value
+            # Calculate intermediate threshold at breakpoint (round 35)
+            intermediate_threshold = 0.42  # You can adjust this value
+            threshold_progress = current_round / breakpoint_round
+            new_threshold = min_threshold + (intermediate_threshold - min_threshold) * threshold_progress
+            print(f"Updated similarity threshold to: {new_threshold:.4f} (round {current_round}/{R}, phase 1: fast linear growth)")
+        else:
+            # Second segment: slower linear growth from intermediate to max
+            intermediate_threshold = 0.42
+            remaining_rounds = target_rounds - breakpoint_round
+            current_in_segment = current_round - breakpoint_round
+            threshold_progress = current_in_segment / remaining_rounds
+            new_threshold = intermediate_threshold + (max_threshold - intermediate_threshold) * threshold_progress
+            print(f"Updated similarity threshold to: {new_threshold:.4f} (round {current_round}/{R}, phase 2: slow linear growth)")
+        
         selector.update_threshold(new_threshold)
-        print(f"Updated similarity threshold to: {new_threshold:.4f} (round {current_round}/{R}, based on 200-round scale, slow growth)")
     else:
-        # Se il round corrente supera 200, mantieni il threshold massimo
+        # If current round exceeds 200, maintain maximum threshold
         selector.update_threshold(max_threshold)
         print(f"Updated similarity threshold to: {max_threshold:.4f} (round {current_round}/{R}, max threshold reached)")
-    
+    """
     return trust_vector, updates_contributions
 
 

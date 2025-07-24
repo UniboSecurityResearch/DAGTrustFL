@@ -234,7 +234,7 @@ class OLD_MyCustomTipSelector(TipSelectionAlgorithm):
 class TrustInformedTipSelector(TipSelectionAlgorithm):
     #TODO:
     #mettere il similarity threshold variabile in base all'epoch
-    def __init__(self, max_depth=3, similarity_threshold=0.33, cw_penalty_factor=0.2, similarity_method='cosine'):
+    def __init__(self, max_depth=3, similarity_threshold=0.30, cw_penalty_factor=0.05, similarity_method='cosine'):
         self.max_depth = max_depth #chi, depth of the past cone to inspect
         self.similarity_threshold = similarity_threshold  # Optimized from extended FL testing
         self.cw_penalty_factor = cw_penalty_factor  # Factor to penalize high CW nodes
@@ -379,17 +379,22 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
             scored.sort(key=lambda x: x[1], reverse=True)
             print(f"Scored tips: {scored}")
             
-            # Check past cone for all scored nodes and count violations
-            node_violations = {}
-            for tip, _ in scored:
+            # Check past cone for all scored nodes and remove those with violations
+            filtered_scored = []
+            for tip, score in scored:
                 nodes_to_remove = self.check_past_cone_similarity([tip], dag)
-                node_violations[tip] = len(nodes_to_remove)
+                if len(nodes_to_remove) == 0:
+                    # No violations found, keep this tip
+                    filtered_scored.append((tip, score))
+                else:
+                    # Violations found, remove this tip
+                    print(f"Removing tip {tip} due to {len(nodes_to_remove)} past cone violations")
             
-            # Sort scored by: first by number of violations (ascending), then by score (descending)
-            scored.sort(key=lambda x: (node_violations[x[0]], -x[1]))
-            print(f"Scored tips after past cone analysis: {scored}")
+            # Update scored with filtered results
+            scored = filtered_scored
+            print(f"Scored tips after past cone filtering: {scored}")
             
-            # Step 3: select the best nodes (those with fewest violations and highest scores)
+            # Step 3: select the best nodes (those that passed past cone check)
             selected = [tip for tip, _ in scored[:2]]
             print(f"Selected after past cone check: {selected}")
         # Step 5: if less than 2, add fallback considering also confirmed nodes
