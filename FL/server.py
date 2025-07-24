@@ -78,6 +78,10 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     
     trust_vector, update_contributions = get_trust_vector(parameters_clients, epoch)
     
+    trust_vector = [1,1,1,1,1]
+    update_contributions = [1,1,1,1,1]
+
+
     # Extract trust values only for the selected workers in this round
     ordered_parameters = []
     ordered_trust_values = []
@@ -95,10 +99,10 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     new_nn_params = average_nn_parameters(ordered_parameters, ordered_trust_values)
     #GIACOMO: creating a milestone with the new global model parameters
     milestone(new_nn_params, epoch)
-    trust_vector = []
-    for client_idx in random_workers:
-        trust_vector.append(1.0)
-    new_nn_params = average_nn_parameters(parameters, trust_vector)
+    #trust_vector = []
+    #for client_idx in random_workers:
+    #    trust_vector.append(1.0)
+    #new_nn_params = average_nn_parameters(parameters, trust_vector)
     for client in clients:
         args.get_logger().info("Updating parameters on client #{}", str(client.get_client_index()))
         client.update_nn_parameters(new_nn_params)

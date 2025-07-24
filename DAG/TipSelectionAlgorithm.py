@@ -231,14 +231,10 @@ class OLD_MyCustomTipSelector(TipSelectionAlgorithm):
 
 
 
-
-
-
-
 class TrustInformedTipSelector(TipSelectionAlgorithm):
     #TODO:
     #mettere il similarity threshold variabile in base all'epoch
-    def __init__(self, max_depth=3, similarity_threshold=0.35, cw_penalty_factor=0.2, similarity_method='cosine'):
+    def __init__(self, max_depth=3, similarity_threshold=0.33, cw_penalty_factor=0.2, similarity_method='cosine'):
         self.max_depth = max_depth #chi, depth of the past cone to inspect
         self.similarity_threshold = similarity_threshold  # Optimized from extended FL testing
         self.cw_penalty_factor = cw_penalty_factor  # Factor to penalize high CW nodes

@@ -113,7 +113,7 @@ def test_analysis_scripts(csv_file):
     # Test 2: Script analyze_dag_csv_pdf.py
     try:
         print(f"\n📊 Testing analyze_dag_csv_pdf.py...")
-        from analyze_dag_csv_pdf import DAGAnalyzer
+        from FL.analyze_dag_csv_pdf import DAGAnalyzer
         
         analyzer = DAGAnalyzer(csv_file)
         if analyzer.load_data():
