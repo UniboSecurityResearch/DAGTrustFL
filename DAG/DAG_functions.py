@@ -49,7 +49,7 @@ checkpoint_malicious_conf = 0 #To be summed to total_malicious_confirmed to get 
 checkpoint_corrupted_conf = 0 #To be summed to total_corrupted_confirmed to get the total number of corrupted nodes confirmed
 
 
-def init_csv_logging(filename="dag_trust_analysis.csv"):
+def init_csv_logging(filename="dag_trust_analysis.csv", logger=None):
     """Initialize the CSV file to save round data."""
     global csv_filename
     csv_filename = filename
@@ -76,16 +76,18 @@ def init_csv_logging(filename="dag_trust_analysis.csv"):
         writer = csv.writer(csvfile)
         writer.writerow(headers)
     
-    print(f"CSV logging initialized: {csv_filename}")
+    if logger:
+        logger.info(f"CSV logging initialized: {csv_filename}")
 
 
-def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round, num_corrupted_confirmed_this_round):
+def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round, num_corrupted_confirmed_this_round, logger=None):
     """Save current round data to CSV file."""
     global csv_filename, dag, trust_vector, structural_consistencies, updates_contributions
     global total_good_removed, total_malicious_confirmed, total_corrupted_confirmed, peers, selector, checkpoint_corrupted_conf, checkpoint_malicious_conf
 
     if csv_filename is None:
-        print("Warning: CSV logging not initialized. Call init_csv_logging() first.")
+        if logger:
+            logger.warning("CSV logging not initialized. Call init_csv_logging() first.")
         return
 
     # Calculate current similarity threshold
@@ -95,38 +97,34 @@ def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round,
     good_similarities = []
     bad_similarities = []
 
-
     for node_str in dag.nodes:
         node = dag.nodes[node_str]
         if node.peer.malicious == False and node.epoch == epoch:
-            #print("GOOD NODE:", node.id[:6], "FROM PEER", node.peer.id)
             sim_g = []
             sim_b = []
             for node_other_str in dag.nodes:
                 node_other = dag.nodes[node_other_str]
                 if node_other.epoch == epoch:
-                    #print("COMPARE WITH:", node_other.id[:6], "FROM PEER", node_other.peer.id)
                     if node_other.malicious == False:
                         # Calculate similarity with respect to other good nodes of the round
-                        #sim_g.append(selector.cs_evaluate_similarity(node.id, dag, node_other.data))
-                        sim_g.append(parameter_utils.cos_sim_simple(node.data, node_other.data))
-                        #print("Peer number", node.peer.id, "has good similarities:", sim_g)
+                        sim_g.append(parameter_utils.cos_sim_simple(node.data, node_other.data, logger=logger))
                     else:
                         # Calculate similarity with respect to other malicious nodes of the round
-                        sim_b.append(parameter_utils.cos_sim_simple(node.data, node_other.data))
-                        #print("Peer number", node.peer.id, "has bad similarities:", sim_b)
-            #print("Peer number", node.peer.id, "has good similarities:", sim_g, "and bad:", sim_b)
+                        sim_b.append(parameter_utils.cos_sim_simple(node.data, node_other.data, logger=logger))
             good_similarities.append(np.mean(sim_g)) if sim_g else good_similarities.append(0)
             bad_similarities.append(np.mean(sim_b)) if sim_b else bad_similarities.append(0)
-    print(f"Epoch {epoch} Good similarities:", good_similarities)
-    print(f"Epoch {epoch} Bad similarities:", bad_similarities)
-
+    
+    if logger:
+        logger.info(f"Epoch {epoch} Good similarities: {good_similarities}")
+        logger.info(f"Epoch {epoch} Bad similarities: {bad_similarities}")
 
     mean_sim_good = np.mean(good_similarities) if good_similarities else None
     mean_sim_bad = np.mean(bad_similarities) if bad_similarities else None
     if mean_sim_bad > 0.001 and epoch > 3:
-        selector.update_threshold(np.mean([mean_sim_good,mean_sim_bad]))
-    print(f"Updated similarity threshold to: {selector.get_threshold():.4f}")
+        selector.update_threshold(np.mean([mean_sim_good,mean_sim_bad]), logger=logger)
+    
+    if logger:
+        logger.info(f"Updated similarity threshold to: {selector.get_threshold():.4f}")
 
     # Prepare base round data
     row_data = [
@@ -159,12 +157,13 @@ def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round,
         writer = csv.writer(csvfile)
         writer.writerow(row_data)
     
-    print(f"Round {epoch + 1} data saved to {csv_filename}")
+    if logger:
+        logger.info(f"Round {epoch + 1} data saved to {csv_filename}")
 
 
-def init_DAG(initial_params):
+def init_DAG(initial_params, logger):
     global dag, selector, peers, central_node, malicious_indices, num_malicious, num_corrupted, corrupted_indices, last_node_prev_round, pos, checkpoint_corrupted_conf, checkpoint_malicious_conf
-    #print(initial_params[0])
+    
     # Initialize DAG and tip selector
     dag = DAG.DAG()
     selector = TipSelectionAlgorithm.TrustInformedTipSelector(
@@ -195,7 +194,8 @@ def init_DAG(initial_params):
             # Use the safer copy_parameter_structure function instead of random generation
             genesis_params = parameter_utils.copy_parameter_structure(first_client_params)
         except (ImportError, Exception) as e:
-            print(f"Warning: Could not create genesis parameters from template: {e}")
+            if logger:
+                logger.warning(f"Could not create genesis parameters from template: {e}")
             # Fallback to simple matrix if parameter_utils not available
             genesis_params = dag_utils.generate_data_matrix(malicious=False, corrupted=False)
     else:
@@ -207,23 +207,24 @@ def init_DAG(initial_params):
     pos = nx.spring_layout(dag.graph, seed=42)  # initial layout
     dag_utils.draw_dag(dag, step=0, pos=pos)
     last_node_prev_round = genesis
-    #second_node = DAGNode.DAGNode(np.zeros((3, 3)), peer=central_node)
-    #dag.add_node(second_node, [])
-    print("INITIALIZED GRAPH")
+    
+    if logger:
+        logger.info("INITIALIZED GRAPH")
     
     # Initialize CSV logging
-    init_csv_logging()
+    init_csv_logging(logger=logger)
     
     return X,R,num_malicious,malicious_indices.tolist()
 
 
-def get_trust_vector(parameters_clients, epoch):
+def get_trust_vector(parameters_clients, epoch, logger):
     global dag, selector, peers, longest_ppath, step, added_node_ids, total_good_removed, total_malicious_confirmed, total_corrupted_confirmed, trust_vector, structural_consistencies, updates_contributions, last_node_prev_round, pos, checkpoint_malicious_conf, checkpoint_corrupted_conf
     
     # Take the actual neural network parameters and put them in the DAG nodes
     for peer in peers:
         if peer.id in parameters_clients.keys():
-            print("NODE NUMBER " + str(peer.id))
+            if logger:
+                logger.info("NODE NUMBER " + str(peer.id))
             is_malicious = getattr(peer, "malicious", False)
             is_corrupted = getattr(peer, "corrupted", False)
             
@@ -235,33 +236,45 @@ def get_trust_vector(parameters_clients, epoch):
             if is_malicious:
                 # For malicious peers, we could potentially modify their parameters
                 # but let's use the actual parameters for now to test real detection
-                print("MALICIOUS")
+                if logger:
+                    logger.info("MALICIOUS")
                 pass
             if is_corrupted:
                 # For corrupted peers, same approach
-                print("CORRUPTED")
+                if logger:
+                    logger.info("CORRUPTED")
                 pass
                 
             node = DAGNode.DAGNode(actual_parameters, peer=peer, epoch=epoch)
             node.malicious = is_malicious
             node.corrupted = is_corrupted
-            node_id = peer.add_node(node)
-            added_node_ids.append(node_id)
-            pos = nx.spring_layout(dag.graph, seed=42, pos=pos, fixed=list(pos.keys()))
-            dag_utils.draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
-            step += 1
+            
+            try:
+                node_id = peer.add_node(node)
+                added_node_ids.append(node_id)
+                pos = nx.spring_layout(dag.graph, seed=42, pos=pos, fixed=list(pos.keys()))
+                dag_utils.draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
+                step += 1
+            except Exception as e:
+                if logger:
+                    logger.error(f"Error adding node for peer {peer.id}: {e}")
+                continue
 
-    print(f"\n\nEND OF ROUND {epoch+1}\nTotal nodes: {len(dag.nodes)} - Total tips: {len(dag.tips)}")
+    if logger:
+        logger.info(f"\n\nEND OF ROUND {epoch+1}\nTotal nodes: {len(dag.nodes)} - Total tips: {len(dag.tips)}")
     
     old_path = set(longest_ppath)
     # Heaviest subgraph computations
     unconfirmed_tips = [tip for tip in dag.nodes if not dag.is_confirmed(tip)]
-    #TODO:
-    # compute 2 longest_paths, so that the milestone can connect to both
-    # and reduce drastically the probability of good nodes being removed
-    longest_ppath = compute_longest_path(dag, selector, unconfirmed_tips, last_node_prev_round, old_path)
-    dag_utils.draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
-    step += 1
+    
+    try:
+        longest_ppath = compute_longest_path(dag, selector, unconfirmed_tips, last_node_prev_round, old_path, logger)
+        dag_utils.draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
+        step += 1
+    except Exception as e:
+        if logger:
+            logger.error(f"Error computing longest path: {e}")
+        longest_ppath = old_path  # Fallback to previous path
 
     # Before removing, gather info on malicious/corrupted nodes confirmed and good nodes eliminated
     num_malicious_confirmed = sum(1 for n in longest_ppath if getattr(dag.nodes.get(n, None), "malicious", False))
@@ -270,9 +283,11 @@ def get_trust_vector(parameters_clients, epoch):
     num_good_removed = sum(1 for n in nodes_to_remove if not getattr(dag.nodes.get(n, None), "malicious", False) and not getattr(dag.nodes.get(n, None), "corrupted", False))
     num_malicious_confirmed_this_round = num_malicious_confirmed - total_malicious_confirmed
     num_corrupted_confirmed_this_round = num_corrupted_confirmed - total_corrupted_confirmed
-    print(f"Malicious nodes confirmed: {num_malicious_confirmed_this_round}")
-    print(f"Corrupted nodes confirmed: {num_corrupted_confirmed_this_round}")
-    print(f"Good nodes eliminated: {num_good_removed}")
+    
+    if logger:
+        logger.info(f"Malicious nodes confirmed: {num_malicious_confirmed_this_round}")
+        logger.info(f"Corrupted nodes confirmed: {num_corrupted_confirmed_this_round}")
+        logger.info(f"Good nodes eliminated: {num_good_removed}")
     
     # Develop trust vector for each peer based on structural consistency and updates contributions
     for i, peer in enumerate(peers):
@@ -281,69 +296,108 @@ def get_trust_vector(parameters_clients, epoch):
         # Find the node created by this specific peer in the longest path
         peer_node_in_path = None
         for node_id in longest_ppath:
-            node = dag.nodes[node_id]
-            if hasattr(node, 'peer') and node.peer == peer and node.epoch == epoch:
-                peer_node_in_path = node_id
-                break
-            #TODO: to add efficiency, stop when you find last_node_prev_round node
-            #but it depends on the fact that the order in longest_ppath is the same as in the graph -> to be checked
+            if node_id in dag.nodes:  # Safety check
+                node = dag.nodes[node_id]
+                if hasattr(node, 'peer') and node.peer == peer and node.epoch == epoch:
+                    peer_node_in_path = node_id
+                    break
         
         # If this peer has a node in the longest path and last FL round, check its past cone similarity
         if peer_node_in_path is not None:
-            nodes_outside = selector.check_past_cone_similarity([peer_node_in_path], dag)
-            if len(nodes_outside) > 0:
-                structural_consistency = 0  # Corrupted behavior detected in this peer's node past cone
-                print(f"Peer {i} ({peer.name}): Corrupted behavior detected in node {peer_node_in_path[:6]}")
+            try:
+                nodes_outside = selector.check_past_cone_similarity([peer_node_in_path], dag, logger=logger)
+                if len(nodes_outside) > 0:
+                    structural_consistency = 0  # Corrupted behavior detected in this peer's node past cone
+                    if logger:
+                        logger.info(f"Peer {i} ({peer.name}): Corrupted behavior detected in node {peer_node_in_path[:6]}")
+            except Exception as e:
+                if logger:
+                    logger.error(f"Error checking past cone for peer {i}: {e}")
+                structural_consistency = 0.5  # Conservative default
         else:
             # If peer has no node in the longest path, check if they have any node in the graph
             peer_has_node = False
-            for node_id in dag.nodes:
-                node = dag.nodes[node_id]
-                if hasattr(node, 'peer') and node.peer == peer and node.epoch == epoch:
-                    peer_has_node = True
-                    # The update was outside the heaviest subgraph, so updates contributions is 0
-                    print(f"Peer {i} ({peer.name}): Node outside heaviest graph in node {node_id[:6]} (not in longest path)")
-                    updates_contribution = 0
-                    # Check this peer's node even if not in longest path
-                    nodes_outside = selector.check_past_cone_similarity([node_id], dag)
-                    if len(nodes_outside) > 0:
-                        structural_consistency = 0  # Corrupted behavior detected
-                        print(f"Peer {i} ({peer.name}): Corrupted behavior detected outside heaviest graph in node {node_id[:6]} (not in longest path)")
-                    break
+            for node_id in list(dag.nodes.keys()):  # Create a list copy to avoid concurrent modification
+                if node_id in dag.nodes:  # Safety check
+                    node = dag.nodes[node_id]
+                    if hasattr(node, 'peer') and node.peer == peer and node.epoch == epoch:
+                        peer_has_node = True
+                        # The update was outside the heaviest subgraph, so updates contributions is 0
+                        if logger:
+                            logger.info(f"Peer {i} ({peer.name}): Node outside heaviest graph in node {node_id[:6]} (not in longest path)")
+                        updates_contribution = 0
+                        # Check this peer's node even if not in longest path
+                        try:
+                            nodes_outside = selector.check_past_cone_similarity([node_id], dag, logger=logger)
+                            if len(nodes_outside) > 0:
+                                structural_consistency = 0  # Corrupted behavior detected
+                                if logger:
+                                    logger.info(f"Peer {i} ({peer.name}): Corrupted behavior detected outside heaviest graph in node {node_id[:6]} (not in longest path)")
+                        except Exception as e:
+                            if logger:
+                                logger.error(f"Error checking past cone for peer {i} outside path: {e}")
+                            structural_consistency = 0.5  # Conservative default
+                        break
             
             if not peer_has_node:
-                print(f"Peer {i} ({peer.name}): No node found in the graph for this FL round")
+                if logger:
+                    logger.info(f"Peer {i} ({peer.name}): No node found in the graph for this FL round")
                 # The peer didn't participate in this round, so we assume update contributions is 0.5
                 updates_contribution = trust_vector[i] if i < len(trust_vector) else 0.5
-        if i >= len(updates_contributions):
-            updates_contributions.append(updates_contribution)
-            structural_consistencies.append(structural_consistency)
-        else:
-            # Update existing values    
-            updates_contributions[i] = updates_contribution
-            structural_consistencies[i] = structural_consistency
+        
+        # Ensure vectors are properly sized
+        while len(updates_contributions) <= i:
+            updates_contributions.append(1.0)
+        while len(structural_consistencies) <= i:
+            structural_consistencies.append(1.0)
+        while len(trust_vector) <= i:
+            trust_vector.append(1.0)
+            
+        # Update existing values    
+        updates_contributions[i] = updates_contribution
+        structural_consistencies[i] = structural_consistency
         trust_value = upsilon_1 * structural_consistency + upsilon_2 * updates_contribution
-        trust_value_t = (1-lambda_) * trust_value + lambda_ * (trust_vector[i] if i < len(trust_vector) else trust_value)  # Historical trust influence
+        trust_value_t = (1-lambda_) * trust_value + lambda_ * trust_vector[i]  # Historical trust influence
         trust_vector[i] = trust_value_t
-    print(f"Structural Consistency vector: {structural_consistencies}")
-    print(f"Update Contributions vector: {updates_contributions}")
-    print(f"Trust vector: {trust_vector}")
+    
+    if logger:
+        logger.info(f"Structural Consistency vector: {structural_consistencies}")
+        logger.info(f"Update Contributions vector: {updates_contributions}")
+        logger.info(f"Trust vector: {trust_vector}")
     
     # Save round data to CSV
-    save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round, num_corrupted_confirmed_this_round)
+    try:
+        save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round, num_corrupted_confirmed_this_round, logger=logger)
+    except Exception as e:
+        if logger:
+            logger.error(f"Error saving round data: {e}")
     
-    # Remove nodes outside of the heaviest subgraph
+    # Remove nodes outside of the heaviest subgraph - do this safely
+    nodes_removed = 0
     for n in nodes_to_remove:
-        dag.graph.remove_node(n)
-        dag.nodes.pop(n, None)
-        dag.tips.discard(n)
+        try:
+            if n in dag.graph.nodes:
+                dag.graph.remove_node(n)
+                nodes_removed += 1
+            if n in dag.nodes:
+                dag.nodes.pop(n, None)
+            dag.tips.discard(n)
+        except Exception as e:
+            if logger:
+                logger.error(f"Error removing node {n}: {e}")
+            continue
+    
+    if logger:
+        logger.info(f"Successfully removed {nodes_removed} nodes")
     total_good_removed += num_good_removed
     total_malicious_confirmed = num_malicious_confirmed
     total_corrupted_confirmed = num_corrupted_confirmed
     
-    if ((R/8)%epoch) == 0:
+    # Pruning logic with safety checks
+    if epoch > 0 and ((R//8) != 0) and (epoch % (R//8) == 0):
         # Streamline the graph by removing all nodes up to the last milestone
-        print(f"Pruning graph at epoch {epoch + 1} (R/2)")
+        if logger:
+            logger.info(f"Pruning graph at epoch {epoch + 1}")
         
         # Find all nodes to remove (all except those from milestone onwards)
         nodes_to_prune = []
@@ -351,94 +405,93 @@ def get_trust_vector(parameters_clients, epoch):
         if last_node_prev_round:
             # Find all nodes that precede the last milestone
             for node_id in list(dag.graph.nodes):
-                node = dag.nodes.get(node_id)
-                if node and node.id != last_node_prev_round.id:
-                    # Check if this node is a predecessor of the last milestone
-                    if node.epoch < last_node_prev_round.epoch:
-                        nodes_to_prune.append(node_id)
+                if node_id in dag.nodes:  # Safety check
+                    node = dag.nodes.get(node_id)
+                    if node and node.id != last_node_prev_round.id:
+                        # Check if this node is a predecessor of the last milestone
+                        if hasattr(node, 'epoch') and node.epoch < last_node_prev_round.epoch:
+                            nodes_to_prune.append(node_id)
         
-        # Remove found nodes
+        # Remove found nodes safely
+        pruned_count = 0
         for node_id in nodes_to_prune:
-            if node_id in dag.graph.nodes:
-                dag.graph.remove_node(node_id)
-                dag.nodes.pop(node_id, None)
+            try:
+                if node_id in dag.graph.nodes:
+                    dag.graph.remove_node(node_id)
+                    pruned_count += 1
+                if node_id in dag.nodes:
+                    dag.nodes.pop(node_id, None)
                 dag.tips.discard(node_id)
                 longest_ppath.discard(node_id)  # Remove from longest path set too
-                added_node_ids.remove(node_id) if node_id in added_node_ids else None
+                if node_id in added_node_ids:
+                    added_node_ids.remove(node_id)
+            except Exception as e:
+                if logger:
+                    logger.error(f"Error pruning node {node_id}: {e}")
+                continue
+        
         checkpoint_malicious_conf += total_malicious_confirmed
         checkpoint_corrupted_conf += total_corrupted_confirmed
         total_malicious_confirmed = 0
         total_corrupted_confirmed = 0
         
-        print(f"Removed {len(nodes_to_prune)} nodes during graph pruning")
-        print(f"Remaining nodes: {len(dag.nodes)}")
+        if logger:
+            logger.info(f"Removed {pruned_count} nodes during graph pruning")
+            logger.info(f"Remaining nodes: {len(dag.nodes)}")
     
-    """
-    # Update similarity threshold with piecewise linear growth
-    # Linear growth until round 35, then slower linear growth
-    min_threshold = 0.30
-    max_threshold = 0.55
-    breakpoint_round = 35  # Switch point for different growth rates
-    target_rounds = 200  # Always based on 200 rounds as reference
-    current_round = epoch + 1
-    
-    if current_round <= target_rounds:
-        if current_round <= breakpoint_round:
-            # First segment: linear growth from 0.30 to intermediate value
-            # Calculate intermediate threshold at breakpoint (round 35)
-            intermediate_threshold = 0.42  # You can adjust this value
-            threshold_progress = current_round / breakpoint_round
-            new_threshold = min_threshold + (intermediate_threshold - min_threshold) * threshold_progress
-            print(f"Updated similarity threshold to: {new_threshold:.4f} (round {current_round}/{R}, phase 1: fast linear growth)")
-        else:
-            # Second segment: slower linear growth from intermediate to max
-            intermediate_threshold = 0.42
-            remaining_rounds = target_rounds - breakpoint_round
-            current_in_segment = current_round - breakpoint_round
-            threshold_progress = current_in_segment / remaining_rounds
-            new_threshold = intermediate_threshold + (max_threshold - intermediate_threshold) * threshold_progress
-            print(f"Updated similarity threshold to: {new_threshold:.4f} (round {current_round}/{R}, phase 2: slow linear growth)")
-        
-        selector.update_threshold(new_threshold)
-    else:
-        # If current round exceeds 200, maintain maximum threshold
-        selector.update_threshold(max_threshold)
-        print(f"Updated similarity threshold to: {max_threshold:.4f} (round {current_round}/{R}, max threshold reached)")
-    """
     return trust_vector, updates_contributions
 
 
-def milestone(new_nn_params, epoch):
+def milestone(new_nn_params, epoch, logger):
     global dag, central_node, longest_ppath, added_node_ids, step, last_node_prev_round, pos
     
-    # CREATING MILESTONE
-    last_node = None
-    for node_id in longest_ppath:
-        try:
-            if all(parent not in longest_ppath for parent in dag.graph.predecessors(node_id)):
+    try:
+        # CREATING MILESTONE
+        last_node = None
+        for node_id in longest_ppath:
+            try:
+                if node_id in dag.graph.nodes:  # Safety check
+                    if all(parent not in longest_ppath for parent in dag.graph.predecessors(node_id)):
+                        last_node = node_id
+                        break
+            except Exception as e:
+                if logger:
+                    logger.error(f"Error accessing predecessors for node {node_id}: {e}")
                 last_node = node_id
-                break
-        except Exception as e:
-            print(f"Error accessing predecessors for node {node_id}: {e}")
-            last_node = node_id
-            continue
-    if last_node is not None:
-        last_node_prev_round = dag.nodes[last_node]
-    
-    # Use the actual aggregated neural network parameters for the milestone
-    milestone = DAGNode.DAGNode(new_nn_params, peer=central_node, epoch=epoch)
-    central_node.manual_add_node(new_node=milestone, selected_parents=[last_node_prev_round.id])
-    longest_ppath.add(milestone.id)
-    print("NEW MILESTONE: " + str(milestone.id))
-    print("\n\n")
-    added_node_ids.append(node_id)
-    last_node_prev_round = milestone
-    pos = nx.spring_layout(dag.graph, seed=42, pos=pos, fixed=list(pos.keys()))
-    dag_utils.draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
-    step+=1
-    return
+                continue
+        
+        if last_node is not None and last_node in dag.nodes:
+            last_node_prev_round = dag.nodes[last_node]
+        
+        # Use the actual aggregated neural network parameters for the milestone
+        milestone_node = DAGNode.DAGNode(new_nn_params, peer=central_node, epoch=epoch)
+        
+        # Safely add milestone
+        if last_node_prev_round:
+            central_node.manual_add_node(new_node=milestone_node, selected_parents=[last_node_prev_round.id])
+        else:
+            # Fallback if no previous milestone found
+            central_node.manual_add_node(new_node=milestone_node, selected_parents=[])
+        
+        longest_ppath.add(milestone_node.id)
+        if logger:
+            logger.info("NEW MILESTONE: " + str(milestone_node.id))
+            logger.info("\n\n")
+        added_node_ids.append(milestone_node.id)
+        last_node_prev_round = milestone_node
+        
+        
+        pos = nx.spring_layout(dag.graph, seed=42, pos=pos, fixed=list(pos.keys()))
+        dag_utils.draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
+        step += 1
+        
+    except Exception as e:
+        if logger:
+            logger.error(f"Error creating milestone: {e}")
+        return
 
-def compute_longest_path(dag, selector, unconfirmed_tips, last_node_prev_round, old_path):
+
+def compute_longest_path(dag, selector, unconfirmed_tips, last_node_prev_round, old_path, logger):
     """
     Compute the longest path in the DAG by evaluating tips and checking for corrupted behavior.
     
@@ -454,18 +507,42 @@ def compute_longest_path(dag, selector, unconfirmed_tips, last_node_prev_round, 
     """
     longest_ppath = set()
     
-    for tip in unconfirmed_tips:
-        # Check past cone similarity
-        nodes_to_remove = selector.check_past_cone_similarity([tip], dag)
-        print("Evaluating longest path from tip: " + str(tip))
-        if len(nodes_to_remove) == 0:
-            ppath = dag_utils.search_path_from_tip_to_lastroundFL(dag, tip, last_node_prev_round.id)
-            if len(ppath) > len(longest_ppath):
-                longest_ppath = ppath
-                print("Found new longest path from tip: " + str(tip))
-        else:
-            print("CORRUPTED")
+    try:
+        for tip in unconfirmed_tips:
+            if tip not in dag.nodes:  # Safety check
+                continue
+                
+            # Check past cone similarity
+            try:
+                nodes_to_remove = selector.check_past_cone_similarity([tip], dag)
+                if logger:
+                    logger.info(f"Tip {tip} past cone similarity check: {nodes_to_remove}")
+                if len(nodes_to_remove) == 0:
+                    if last_node_prev_round:
+                        ppath = dag_utils.search_path_from_tip_to_lastroundFL(dag, tip, last_node_prev_round.id)
+                        if len(ppath) > len(longest_ppath):
+                            longest_ppath = ppath
+                            if logger:
+                                logger.info("Found new longest path from tip: " + str(tip))
+                else:
+                    if logger:
+                        logger.info("CORRUPTED")
+            except Exception as e:
+                if logger:
+                    logger.error(f"Error evaluating tip {tip}: {e}")
+                continue
+
+        # Union with old path - safely
+        if old_path:
+            # Only include nodes that still exist in the DAG
+            valid_old_nodes = {node for node in old_path if node in dag.nodes}
+            longest_ppath = longest_ppath.union(valid_old_nodes)
+        
+    except Exception as e:
+        if logger:
+            logger.error(f"Error in compute_longest_path: {e}")
+        # Fallback to old path if available
+        if old_path:
+            longest_ppath = {node for node in old_path if node in dag.nodes}
     
-    # Union with old path
-    longest_ppath = longest_ppath.union(old_path)
     return longest_ppath

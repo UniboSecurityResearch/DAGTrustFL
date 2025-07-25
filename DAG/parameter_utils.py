@@ -601,13 +601,14 @@ def cosine_similarity_defense_score(global_model_params, local_models_params, ta
     
     return scores
 
-def cos_sim_simple(model1, model2):
+def cos_sim_simple(model1, model2, logger=None):
     """
     Calculate cosine similarity using only fully connected layer weights.
     
     Args:
         model1: First model parameters (dict with layer names as keys)
         model2: Second model parameters (dict with layer names as keys)
+        logger: Optional logger for warnings
         
     Returns:
         float: Cosine similarity score between fc.weight layers
@@ -631,16 +632,14 @@ def cos_sim_simple(model1, model2):
             # Flatten and add to lists
             fc_weights_1.append(tensor1)
             fc_weights_2.append(tensor2)
-            
-            #print(f"Found fc.weight layer: {key}")
-            #print(f"  Shape: {tensor1.shape}")
     
     # Check if we found any fc.weight layers
     if not fc_weights_1 or not fc_weights_2:
-        print("Warning: No fc.weight layers found in the models")
+        if logger:
+            logger.warning("No fc.weight layers found in the models")
+        else:
+            print("Warning: No fc.weight layers found in the models")
         return 0.0
-    
-    
     
     # Calculate cosine similarity
     similarity = smp.cosine_similarity(fc_weights_1[0], fc_weights_2[0]) -np.eye(len(fc_weights_1[0]))

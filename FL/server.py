@@ -1,5 +1,9 @@
 from loguru import logger
 import numpy as np
+import psutil
+import gc
+import os
+import torch
 from federated_learning.arguments import Arguments
 from federated_learning.utils import generate_data_loaders_from_distributed_dataset
 from federated_learning.datasets.data_distribution import distribute_batches_equally
@@ -29,6 +33,67 @@ r_filez = []
 w_filez = []
 
 
+def check_memory():
+    """
+    Monitor memory usage and trigger garbage collection if needed.
+    """
+    try:
+        process = psutil.Process(os.getpid())
+        memory_info = process.memory_info()
+        memory_mb = memory_info.rss / 1024 / 1024
+        memory_percent = process.memory_percent()
+        
+        # Get system memory info
+        system_memory = psutil.virtual_memory()
+        available_mb = system_memory.available / 1024 / 1024
+        
+        logger.info(f"Memory usage: {memory_mb:.2f} MB ({memory_percent:.1f}% of system)")
+        logger.info(f"Available system memory: {available_mb:.2f} MB")
+        
+        # Check GPU memory if CUDA is available
+        if torch.cuda.is_available():
+            try:
+                gpu_memory_allocated = torch.cuda.memory_allocated() / 1024 / 1024
+                gpu_memory_reserved = torch.cuda.memory_reserved() / 1024 / 1024
+                logger.info(f"GPU memory - Allocated: {gpu_memory_allocated:.2f} MB, Reserved: {gpu_memory_reserved:.2f} MB")
+            except Exception as e:
+                logger.warning(f"Could not get GPU memory info: {e}")
+        
+        # Trigger garbage collection if memory usage is high
+        if memory_mb > 1000:  # Alert if over 1GB
+            logger.warning(f"High memory usage detected: {memory_mb:.2f} MB")
+            logger.info("Triggering garbage collection...")
+            
+            # Clear PyTorch cache
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            # Force garbage collection
+            collected = gc.collect()
+            logger.info(f"Garbage collection completed, collected {collected} objects")
+            
+            # Check memory again after cleanup
+            process = psutil.Process(os.getpid())
+            new_memory_mb = process.memory_info().rss / 1024 / 1024
+            logger.info(f"Memory after cleanup: {new_memory_mb:.2f} MB (freed {memory_mb - new_memory_mb:.2f} MB)")
+        
+        # Critical memory warning
+        if memory_mb > 2000:  # Critical if over 2GB
+            logger.warning(f"CRITICAL: Very high memory usage: {memory_mb:.2f} MB")
+            logger.warning("Consider reducing batch size, model size, or number of workers")
+        
+        return {
+            'memory_mb': memory_mb,
+            'memory_percent': memory_percent,
+            'available_mb': available_mb,
+            'gpu_allocated_mb': gpu_memory_allocated if torch.cuda.is_available() else 0,
+            'gpu_reserved_mb': gpu_memory_reserved if torch.cuda.is_available() else 0
+        }
+        
+    except Exception as e:
+        logger.error(f"Error checking memory: {e}")
+        return None
+
 def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     """
     Train a subset of clients per round.
@@ -42,6 +107,10 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     :param poisoned_workers: indices of poisoned workers
     :type poisoned_workers: list(int)
     """
+    # Memory check at start of round
+    logger.info(f"=== ROUND {epoch} START - Memory Check ===")
+    check_memory()
+    
     kwargs = args.get_round_worker_selection_strategy_kwargs()
     kwargs["current_epoch_number"] = epoch
 
@@ -56,29 +125,29 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
         args.get_logger().info("Training epoch #{} on client #{}", str(epoch), str(clients[client_idx].get_client_index()))
         clients[client_idx].train(epoch)
     
+    # Memory check after training
+    logger.info(f"=== ROUND {epoch} AFTER TRAINING - Memory Check ===")
+    check_memory()
+    
     #Saving parameters of clients in a dict for the graph
     parameters_clients = {}
     for client_idx in random_workers:
         parameters_clients[client_idx] = clients[client_idx].get_nn_parameters()
     args.get_logger().info("Averaging client parameters")
     parameters = [clients[client_idx].get_nn_parameters() for client_idx in random_workers]
-    '''
-    i=0
-    j=0
-    for parameter1 in parameters:
-        for parameter2 in parameters:
-            score = cos_sim_simple(parameter1, parameter2)  # Example for two clients
-            if j in poisoned_workers:
-                print("POISONED")
-            print(f"\n\nCosine similarity score between client {i} and client {j}: {score}\n\n")
-            j+=1
-        i+=1
-        j=0
-    '''
     
-    trust_vector, update_contributions = get_trust_vector(parameters_clients, epoch)
+    try:
+        trust_vector, update_contributions = get_trust_vector(parameters_clients, epoch, logger=logger)
+    except Exception as e:
+        logger.error(f"Error in get_trust_vector for epoch {epoch}: {e}")
+        logger.error("This may be causing the segmentation fault")
+        # Memory check after error
+        check_memory()
+        raise e
     
-
+    # Memory check after DAG operations
+    logger.info(f"=== ROUND {epoch} AFTER DAG OPERATIONS - Memory Check ===")
+    check_memory()
 
     # Extract trust values only for the selected workers in this round
     ordered_parameters = []
@@ -95,15 +164,46 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     args.get_logger().info("Corresponding trust values: {}", str(ordered_trust_values))
     
     new_nn_params = average_nn_parameters(ordered_parameters, ordered_trust_values)
-    #GIACOMO: creating a milestone with the new global model parameters
-    milestone(new_nn_params, epoch)
-    #trust_vector = []
-    #for client_idx in random_workers:
-    #    trust_vector.append(1.0)
-    #new_nn_params = average_nn_parameters(parameters, trust_vector)
+    
+    try:
+        #GIACOMO: creating a milestone with the new global model parameters
+        milestone(new_nn_params, epoch, logger=logger)
+    except Exception as e:
+        logger.error(f"Error in milestone creation for epoch {epoch}: {e}")
+        # Memory check after error
+        check_memory()
+        raise e
+    
+    # Memory check after milestone
+    logger.info(f"=== ROUND {epoch} AFTER MILESTONE - Memory Check ===")
+    check_memory()
+    
     for client in clients:
         args.get_logger().info("Updating parameters on client #{}", str(client.get_client_index()))
-        client.update_nn_parameters(new_nn_params)
+        try:
+            client.update_nn_parameters(new_nn_params)
+        except Exception as e:
+            logger.error(f"Error in updating nn params for epoch {epoch} and client {client}: {e}")
+            # Memory check after error
+            check_memory()
+            #raise e
+
+    # Final memory check at end of round
+    logger.info(f"=== ROUND {epoch} END - Memory Check ===")
+    memory_stats = check_memory()
+    
+    # Log memory trend
+    if hasattr(train_subset_of_clients, 'previous_memory'):
+        if memory_stats:
+            memory_increase = memory_stats['memory_mb'] - train_subset_of_clients.previous_memory
+            logger.info(f"Memory change since last round: {memory_increase:+.2f} MB")
+            
+            # Warning if memory is consistently increasing
+            if memory_increase > 50:  # More than 50MB increase
+                logger.warning(f"Significant memory increase detected: {memory_increase:.2f} MB")
+    
+    if memory_stats:
+        train_subset_of_clients.previous_memory = memory_stats['memory_mb']
 
     return clients[0].test(), random_workers
 
@@ -130,13 +230,39 @@ def run_machine_learning(clients, args, poisoned_workers):
     epoch_test_set_results = []
     worker_selection = []
     
+    # Initial memory baseline
+    logger.info("=== EXPERIMENT START - Initial Memory Check ===")
+    initial_memory = check_memory()
+    
     for epoch in range(1, args.get_num_epochs() + 1):
-        results, workers_selected = train_subset_of_clients(epoch, args, clients, poisoned_workers)
+        try:
+            results, workers_selected = train_subset_of_clients(epoch, args, clients, poisoned_workers)
 
-        epoch_test_set_results.append(results)
-        worker_selection.append(workers_selected)
-        save_results(convert_results_to_csv([results]), r_filez[0])
-        save_results([workers_selected], w_filez[0])
+            epoch_test_set_results.append(results)
+            worker_selection.append(workers_selected)
+            save_results(convert_results_to_csv([results]), r_filez[0])
+            save_results([workers_selected], w_filez[0])
+            
+            # Log progress with memory info
+            if epoch % 5 == 0:  # Every 5 epochs
+                logger.info(f"=== PROGRESS UPDATE - Completed {epoch}/{args.get_num_epochs()} epochs ===")
+                current_memory = check_memory()
+                if initial_memory and current_memory:
+                    total_increase = current_memory['memory_mb'] - initial_memory['memory_mb']
+                    logger.info(f"Total memory increase since start: {total_increase:+.2f} MB")
+                    
+        except Exception as e:
+            logger.error(f"Error in epoch {epoch}: {e}")
+            logger.error("Performing emergency memory check...")
+            check_memory()
+            raise e
+
+    # Final memory summary
+    logger.info("=== EXPERIMENT END - Final Memory Check ===")
+    final_memory = check_memory()
+    if initial_memory and final_memory:
+        total_increase = final_memory['memory_mb'] - initial_memory['memory_mb']
+        logger.info(f"Total memory increase during experiment: {total_increase:+.2f} MB")
 
     return convert_results_to_csv(epoch_test_set_results), worker_selection
 
@@ -178,7 +304,7 @@ def run_exp(replacement_method, client_selection_strategy, idx):
         initial_parameters[client.get_client_index()] = client.get_nn_parameters()
     
     #GIACOMO: Initialize DAG with initial client parameters
-    X, R, num_malicious, malicious_indices = init_DAG(initial_parameters)
+    X, R, num_malicious, malicious_indices = init_DAG(initial_parameters, logger=logger)
     NUMWORK=X-1
 
     # Now update the configuration with actual values from DAG

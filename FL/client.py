@@ -6,6 +6,8 @@ from federated_learning.schedulers import MinCapableStepLR
 import os
 import numpy
 import copy
+import psutil
+import gc
 
 class Client:
 
@@ -114,6 +116,15 @@ class Client:
         :param epoch: Current epoch #
         :type epoch: int
         """
+        # Memory check before training
+        try:
+            process = psutil.Process(os.getpid())
+            memory_before = process.memory_info().rss / 1024 / 1024
+            if hasattr(self.args, 'get_logger'):
+                self.args.get_logger().debug(f"Client {self.client_idx} memory before training: {memory_before:.2f} MB")
+        except:
+            pass  # Don't fail if psutil not available
+        
         self.net.train()
 
         # save model
@@ -137,7 +148,6 @@ class Client:
             running_loss += loss.item()
             if i % self.args.get_log_interval() == 0:
                 self.args.get_logger().info('[%d, %5d] loss: %.3f' % (epoch, i, running_loss / self.args.get_log_interval()))
-
                 running_loss = 0.0
 
         self.scheduler.step()
@@ -145,6 +155,23 @@ class Client:
         # save model
         if self.args.should_save_model(epoch):
             self.save_model(epoch, self.args.get_epoch_save_end_suffix())
+
+        # Memory check after training
+        try:
+            process = psutil.Process(os.getpid())
+            memory_after = process.memory_info().rss / 1024 / 1024
+            memory_increase = memory_after - memory_before
+            if hasattr(self.args, 'get_logger'):
+                self.args.get_logger().debug(f"Client {self.client_idx} memory after training: {memory_after:.2f} MB (+{memory_increase:.2f} MB)")
+                
+                # Trigger cleanup if client is using too much memory
+                if memory_after > 500:  # 500MB threshold for individual client
+                    self.args.get_logger().warning(f"Client {self.client_idx} high memory usage: {memory_after:.2f} MB")
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    gc.collect()
+        except:
+            pass
 
         return running_loss
 

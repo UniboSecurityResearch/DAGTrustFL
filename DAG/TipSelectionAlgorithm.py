@@ -240,7 +240,7 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
         self.cw_penalty_factor = cw_penalty_factor  # Factor to penalize high CW nodes
         self.similarity_method = similarity_method  # Method for similarity calculation
 
-    def update_threshold(self, new_threshold):
+    def update_threshold(self, new_threshold, logger=None):
         """
         Update the similarity threshold dynamically.
         
@@ -248,7 +248,11 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
         :type new_threshold: float
         """
         self.similarity_threshold = new_threshold
-        print(f"Updated similarity threshold to {self.similarity_threshold}")
+        if logger:
+            logger.info(f"Updated similarity threshold to {self.similarity_threshold}")
+        else:
+            if logger:
+                logger.info(f"Updated similarity threshold to {self.similarity_threshold}")
 
     def get_threshold(self):
         """
@@ -259,44 +263,49 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
         """
         return self.similarity_threshold
 
-    def cs_evaluate_similarity(self, node_id, dag: DAG, new_parameters):
+    def cs_evaluate_similarity(self, node_id, dag: DAG, new_parameters, logger=None):
         current_parameters = dag.nodes[node_id].data
         if dag.nodes[node_id].peer.name == "CentralNode":
             return 1.0 - (self.cw_penalty_factor * dag.nodes[node_id].cw)
         else:
             return (parameter_utils.cos_sim_simple(current_parameters, new_parameters) - (self.cw_penalty_factor * dag.nodes[node_id].cw))
 
-    def euclidean_distance(self, params1, params2):
-        return parameter_utils.normalized_euclidean_proximity_parameters(params1, params2)
-
-    # Evaluate similarity score recursively up to a maximum depth
-    # It evaluates also the past cone of the transaction, to check for
-    # corrupted behaviors
-    def evaluate_similarity(self, node_id, dag: DAG, new_parameters):
+    def evaluate_similarity(self, node_id, dag: DAG, new_parameters, logger=None):
         weight=1
         cw_penalty = 1
         # Calculate similarity between the new parameters and the current node's parameters
         current_parameters = dag.nodes[node_id].data
         
-        # Debug: print information about the parameters
-        #print(f"Evaluating similarity for node {node_id}")
-        #print(f"  Node peer name: {dag.nodes[node_id].peer.name}")
+        # Debug: log information about the parameters
+        if logger:
+            logger.debug(f"Evaluating similarity for node {node_id}")
+            logger.debug(f"  Node peer name: {dag.nodes[node_id].peer.name}")
+        
         if type(new_parameters) != type(current_parameters):
-            print(f"  WARNING: new_parameters and current_parameters are not of the same type: {type(new_parameters)} vs {type(current_parameters)}")
+            if logger:
+                logger.warning(f"new_parameters and current_parameters are not of the same type: {type(new_parameters)} vs {type(current_parameters)}")
+            else:
+                if logger:
+                    logger.warning(f"  WARNING: new_parameters and current_parameters are not of the same type: {type(new_parameters)} vs {type(current_parameters)}")
             # Return a neutral score for incompatible data types
             return 0.5
         
         # Check if both parameters are neural network parameters
         if hasattr(new_parameters, '__len__') and hasattr(current_parameters, '__len__'):
-            if hasattr(new_parameters, 'shape'):
-                print(f"  New parameters shape: {new_parameters.shape}")
-            if hasattr(current_parameters, 'shape'):
-                print(f"  Current parameters shape: {current_parameters.shape}")
+            if hasattr(new_parameters, 'shape') and logger:
+                logger.debug(f"  New parameters shape: {new_parameters.shape}")
+            if hasattr(current_parameters, 'shape') and logger:
+                logger.debug(f"  Current parameters shape: {current_parameters.shape}")
         
         # Check if current_parameters looks like a neural network parameter set
         if not isinstance(current_parameters, (dict, type(new_parameters))):
-            print(f"  WARNING: current_parameters is not a dict or same type as new_parameters")
-            print(f"  Current parameters content preview: {str(current_parameters)[:100]}...")
+            if logger:
+                logger.warning(f"current_parameters is not a dict or same type as new_parameters")
+                logger.debug(f"  Current parameters content preview: {str(current_parameters)[:100]}...")
+            else:
+                if logger:
+                    logger.warning(f"  WARNING: current_parameters is not a dict or same type as new_parameters")
+                    logger.debug(f"  Current parameters content preview: {str(current_parameters)[:100]}...")
             # Return a neutral score for incompatible data types
             return 0.5
         
@@ -304,7 +313,7 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
         weighted_similarity = weight * sim * cw_penalty
         return weighted_similarity if not np.isnan(sim) else -1
     
-    def check_past_cone_similarity(self, selected_nodes, dag: DAG, debug=1):
+    def check_past_cone_similarity(self, selected_nodes, dag: DAG, debug=1, logger=None):
         """
         Check if any node in the past cone of selected nodes has low similarity with its parents (corrupted behavior).
         Returns a list of nodes that should be removed from selection.
@@ -323,22 +332,27 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
                     current_parameters = dag.nodes[current].data
                     # Get parent nodes of current node
                     parent_nodes = list(dag.graph.successors(current))
-                    print(f"NAME: {dag.nodes[current].peer.name}")
+                    if logger:
+                        logger.debug(f"NAME: {dag.nodes[current].peer.name}")
+                    else:
+                        if logger:
+                            logger.debug(f"NAME: {dag.nodes[current].peer.name}")
                     if dag.nodes[current].peer.name != "CentralNode":
                         # Compare current node's parameters with each parent's parameters
                         for parent in parent_nodes:
                             if(dag.nodes[parent].peer.name == "CentralNode"):
                                 # Skip the central node, as it is not a peer and does not have parameters
-                                #print("Parent node is from CentralNode, skipping similarity check")
                                 sim=1.0
                             else:
                                 parent_parameters = dag.nodes[parent].data
-                                #sim = self.euclidean_distance(parent_parameters, current_parameters)
                                 sim = parameter_utils.cos_sim_simple(current_parameters,parent_parameters)
-                                #sim = self.cosine_similarity(current_parameters, parent_parameters)
                                 if not np.isnan(sim) and sim < self.similarity_threshold:
                                     if debug == 1:
-                                        print(f"Node {node_id} excluded due to low similarity ({sim:.4f}) between node {current} and its parent {parent}")
+                                        if logger:
+                                            logger.debug(f"Node {node_id} excluded due to low similarity ({sim:.4f}) between node {current} and its parent {parent}")
+                                        else:
+                                            if logger:
+                                                logger.debug(f"Node {node_id} excluded due to low similarity ({sim:.4f}) between node {current} and its parent {parent}")
                                     should_remove_node = True
                                     break
                 
@@ -351,20 +365,19 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
         
         return nodes_to_remove
 
-    def select_tips(self, dag: DAG, new_parameters, corrupted=False) -> list:
+    def select_tips(self, dag: DAG, new_parameters, corrupted=False, logger=None) -> list:
         # Step 1: find all tips (CW < Theta)
         dag.update_cumulative_weights()
         candidate_tips = [
             n for n in dag.graph.nodes
             if not dag.is_confirmed(n)
         ]
-        #print(f"Candidate tips: {candidate_tips}")
+        
         # Step 2: calculate similarity for each tip
         scored = []
         selected = []
         for tip in candidate_tips:
-            score = self.cs_evaluate_similarity(tip, dag, new_parameters)
-            #print(f"Tip: {tip}, Score: {score}")
+            score = self.cs_evaluate_similarity(tip, dag, new_parameters, logger)
             if score is not None:
                 scored.append((tip, score))
         
@@ -377,29 +390,49 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
         else:
             # Sort by descending score
             scored.sort(key=lambda x: x[1], reverse=True)
-            print(f"Scored tips: {scored}")
+            if logger:
+                logger.info(f"Scored tips: {scored}")
+            else:
+                if logger:
+                    logger.info(f"Scored tips: {scored}")
             
             # Check past cone for all scored nodes and remove those with violations
             filtered_scored = []
             for tip, score in scored:
-                nodes_to_remove = self.check_past_cone_similarity([tip], dag)
+                nodes_to_remove = self.check_past_cone_similarity([tip], dag, logger=logger)
                 if len(nodes_to_remove) == 0:
                     # No violations found, keep this tip
                     filtered_scored.append((tip, score))
                 else:
                     # Violations found, remove this tip
-                    print(f"Removing tip {tip} due to {len(nodes_to_remove)} past cone violations")
+                    if logger:
+                        logger.info(f"Removing tip {tip} due to {len(nodes_to_remove)} past cone violations")
+                    else:
+                        if logger:
+                            logger.info(f"Removing tip {tip} due to {len(nodes_to_remove)} past cone violations")
             
             # Update scored with filtered results
             scored = filtered_scored
-            print(f"Scored tips after past cone filtering: {scored}")
+            if logger:
+                logger.info(f"Scored tips after past cone filtering: {scored}")
+            else:
+                if logger:
+                    logger.info(f"Scored tips after past cone filtering: {scored}")
             
             # Step 3: select the best nodes (those that passed past cone check)
             selected = [tip for tip, _ in scored[:2]]
-            print(f"Selected after past cone check: {selected}")
+            if logger:
+                logger.info(f"Selected after past cone check: {selected}")
+            else:
+                if logger:
+                    logger.info(f"Selected after past cone check: {selected}")
         # Step 5: if less than 2, add fallback considering also confirmed nodes
         if len(selected) < 2:
-            print(f"FALLBACK FROM CONFIRMED NODES {2 - len(selected)}")
+            if logger:
+                logger.info(f"FALLBACK FROM CONFIRMED NODES {2 - len(selected)}")
+            else:
+                if logger:
+                    logger.info(f"FALLBACK FROM CONFIRMED NODES {2 - len(selected)}")
             confirmed_nodes = [
                 n for n in dag.graph.nodes
                 if dag.is_confirmed(n) and n not in selected
@@ -407,20 +440,32 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
             # Filter confirmed nodes for those that are similar
             confirmed_scores = []
             for node in confirmed_nodes:
-                print(f"Checking confirmed node: {node}")
-                
+                if logger:
+                    logger.debug(f"Checking confirmed node: {node}")
+                else:
+                    if logger:
+                        logger.info(f"Checking confirmed node: {node}")
+
                 # Quick compatibility check before calling evaluate_similarity
                 try:
                     current_parameters = dag.nodes[node].data
                     # Check if the data looks like neural network parameters
                     if not isinstance(current_parameters, (dict, type(new_parameters))):
-                        print(f"  Skipping node {node} - incompatible data type: {type(current_parameters)}")
+                        if logger:
+                            logger.warning(f"Skipping node {node} - incompatible data type: {type(current_parameters)}")
+                        else:
+                            if logger:
+                                logger.warning(f"  Skipping node {node} - incompatible data type: {type(current_parameters)}")
                         continue
                 except Exception as e:
-                    print(f"  Error accessing data for node {node}: {e}")
+                    if logger:
+                        logger.error(f"Error accessing data for node {node}: {e}")
+                    else:
+                        if logger:
+                            logger.error(f"  Error accessing data for node {node}: {e}")
                     continue
                 
-                score = self.cs_evaluate_similarity(node, dag, new_parameters)
+                score = self.cs_evaluate_similarity(node, dag, new_parameters, logger)
                 if score is not None:
                     confirmed_scores.append((node, score))
             if corrupted:
@@ -431,7 +476,11 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
                 # If not corrupted, we want to select the best confirmed nodes and check their past cone
                 new_selected = []    
                 confirmed_scores.sort(key=lambda x: x[1], reverse=True)
-                print(f"Confirmed nodes: {confirmed_scores}")
+                if logger:
+                    logger.info(f"Confirmed nodes: {confirmed_scores}")
+                else:
+                    if logger:
+                        logger.info(f"Confirmed nodes: {confirmed_scores}")
                 repeat = True
                 while len(scored)> 2 and repeat:
                     # Step 3: select the best unconfirmed nodes
@@ -439,7 +488,7 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
                     new_selected = [node for node, _ in confirmed_scores[:2 - len(selected)]]
                     # Step 4: Examine the past cone of the selected nodes
                     # Check if any node in the past cone has low similarity with its parents
-                    nodes_to_remove = self.check_past_cone_similarity(new_selected, dag)
+                    nodes_to_remove = self.check_past_cone_similarity(new_selected, dag, logger=logger)
                     # Remove nodes that failed the similarity check (with corrupted behavior)
                     for node_id in nodes_to_remove:
                         if node_id in new_selected:
@@ -447,13 +496,21 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
                             repeat = True
                             # Remove the tuple (node_id, score) from confirmed_scores list
                             confirmed_scores = [(tip, score) for tip, score in confirmed_scores if tip != node_id]
-                print(f"New selected: {new_selected}")
+                if logger:
+                    logger.info(f"New selected: {new_selected}")
+                else:
+                    if logger:
+                        logger.info(f"New selected: {new_selected}")
                 selected += new_selected
         # Step 5: if still 0, pick any other node as final fallback
         if len(selected) < 1:
             backup_nodes = [n for n in dag.graph.nodes if n not in selected]
             random.shuffle(backup_nodes)
             selected += backup_nodes[:1 - len(selected)]
-        print(f"Selected tips: {selected}")
+        if logger:
+            logger.info(f"Selected tips: {selected}")
+        else:
+            if logger:
+                logger.info(f"Selected tips: {selected}")
         return selected[:2]
 
