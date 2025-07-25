@@ -15,11 +15,11 @@ import csv
 import os
 
 #matplotlib.use('Qt5Agg')
-# Simulazione di un DAG con X peer, cada uno fa Y nodi
-X= 10  # Numero di peer
-R= 200  # Numero di round di FL
-malicious_percentage = 0.2  # Percentuale di peer malevoli
-corrupted_percentage = 0.2  # Percentuale di peer corrotti
+# Simulation of a DAG with X peers, each one makes Y nodes
+X= 10  # Number of peers
+R= 200  # Number of FL rounds
+malicious_percentage = 0.2  # Percentage of malicious peers
+corrupted_percentage = 0.2  # Percentage of corrupted peers
 
 trust_vector = [1] * X
 structural_consistencies = []
@@ -39,20 +39,22 @@ last_node_prev_round = None
 longest_ppath = set()
 step = 1
 added_node_ids = []
-frames_info = []  # Per salvare info dei frame se serve
+frames_info = []  # To save frame info if needed
 total_good_removed = 0
-total_malicious_confirmed = 0
-total_corrupted_confirmed = 0
+total_malicious_confirmed = 0 #The total refers to the total number from last pruning of the graph
+total_corrupted_confirmed = 0 #The total refers to the total number from last pruning of the graph
 pos = None
-csv_filename = None  # Nome del file CSV per salvare i dati
+csv_filename = None  # CSV filename to save data
+checkpoint_malicious_conf = 0 #To be summed to total_malicious_confirmed to get the total number of malicious nodes confirmed
+checkpoint_corrupted_conf = 0 #To be summed to total_corrupted_confirmed to get the total number of corrupted nodes confirmed
 
 
 def init_csv_logging(filename="dag_trust_analysis.csv"):
-    """Inizializza il file CSV per salvare i dati dei round."""
+    """Initialize the CSV file to save round data."""
     global csv_filename
     csv_filename = filename
     
-    # Crea l'header del CSV
+    # Create CSV header
     headers = [
         'Round', 'Total_Nodes', 'Total_Tips', 
         'Good_Nodes_Removed_This_Round', 'Malicious_Nodes_Confirmed_This_Round', 
@@ -61,7 +63,7 @@ def init_csv_logging(filename="dag_trust_analysis.csv"):
         'Similarity_Threshold', 'Mean_Similarity_Good', 'Mean_Similarity_Bad'
     ]
     
-    # Aggiungi colonne per il trust vector e le metriche per ogni peer
+    # Add columns for trust vector and metrics for each peer
     for i in range(X):
         headers.extend([
             f'Peer_{i}_Trust', f'Peer_{i}_Structural_Consistency', 
@@ -69,7 +71,7 @@ def init_csv_logging(filename="dag_trust_analysis.csv"):
             f'Peer_{i}_Is_Corrupted'
         ])
     
-    # Scrivi l'header
+    # Write header
     with open(csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(headers)
@@ -78,18 +80,18 @@ def init_csv_logging(filename="dag_trust_analysis.csv"):
 
 
 def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round, num_corrupted_confirmed_this_round):
-    """Salva i dati del round corrente nel file CSV."""
+    """Save current round data to CSV file."""
     global csv_filename, dag, trust_vector, structural_consistencies, updates_contributions
-    global total_good_removed, total_malicious_confirmed, total_corrupted_confirmed, peers, selector
+    global total_good_removed, total_malicious_confirmed, total_corrupted_confirmed, peers, selector, checkpoint_corrupted_conf, checkpoint_malicious_conf
 
     if csv_filename is None:
         print("Warning: CSV logging not initialized. Call init_csv_logging() first.")
         return
 
-    # Calcola la soglia di similitudine attuale
+    # Calculate current similarity threshold
     similarity_threshold = selector.get_threshold()
 
-    # Calcola le similitudini medie dei nodi buoni e cattivi
+    # Calculate mean similarities of good and bad nodes
     good_similarities = []
     bad_similarities = []
 
@@ -97,23 +99,23 @@ def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round,
     for node_str in dag.nodes:
         node = dag.nodes[node_str]
         if node.peer.malicious == False and node.epoch == epoch:
-            #print("NODO BUONO:", node.id[:6], "DEL PEER", node.peer.id)
+            #print("GOOD NODE:", node.id[:6], "FROM PEER", node.peer.id)
             sim_g = []
             sim_b = []
             for node_other_str in dag.nodes:
                 node_other = dag.nodes[node_other_str]
                 if node_other.epoch == epoch:
-                    #print("CONFRONTA CON:", node_other.id[:6], "DEL PEER", node_other.peer.id)
+                    #print("COMPARE WITH:", node_other.id[:6], "FROM PEER", node_other.peer.id)
                     if node_other.malicious == False:
-                        # Calcola la similitudine rispetto gli altri nodi buoni del round (se esiste la funzione nel selettore)
+                        # Calculate similarity with respect to other good nodes of the round
                         #sim_g.append(selector.cs_evaluate_similarity(node.id, dag, node_other.data))
                         sim_g.append(parameter_utils.cos_sim_simple(node.data, node_other.data))
-                        #print("Peer numero", node.peer.id, "ha similitudini buone:", sim_g)
+                        #print("Peer number", node.peer.id, "has good similarities:", sim_g)
                     else:
-                        # Calcola la similitudine rispetto agli altri nodi malevoli del round
+                        # Calculate similarity with respect to other malicious nodes of the round
                         sim_b.append(parameter_utils.cos_sim_simple(node.data, node_other.data))
-                        #print("Peer numero", node.peer.id, "ha similitudini cattive:", sim_b)
-            #print("Peer numero", node.peer.id, "ha similitudini buone:", sim_g, "e cattive:", sim_b)
+                        #print("Peer number", node.peer.id, "has bad similarities:", sim_b)
+            #print("Peer number", node.peer.id, "has good similarities:", sim_g, "and bad:", sim_b)
             good_similarities.append(np.mean(sim_g)) if sim_g else good_similarities.append(0)
             bad_similarities.append(np.mean(sim_b)) if sim_b else bad_similarities.append(0)
     print(f"Epoch {epoch} Good similarities:", good_similarities)
@@ -126,7 +128,7 @@ def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round,
         selector.update_threshold(np.mean([mean_sim_good,mean_sim_bad]))
     print(f"Updated similarity threshold to: {selector.get_threshold():.4f}")
 
-    # Prepara i dati base del round
+    # Prepare base round data
     row_data = [
         epoch + 1,  # Round (1-indexed)
         len(dag.nodes),  # Total nodes
@@ -135,12 +137,12 @@ def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round,
         num_malicious_confirmed_this_round,  # Malicious nodes confirmed this round
         num_corrupted_confirmed_this_round,   # Corrupted nodes confirmed this round
         total_good_removed,  # Total good removed
-        total_malicious_confirmed,  # Total malicious confirmed
-        total_corrupted_confirmed,   # Total corrupted confirmed
+        (total_malicious_confirmed + checkpoint_malicious_conf),  # Total malicious confirmed
+        (total_corrupted_confirmed + checkpoint_corrupted_conf),   # Total corrupted confirmed
         similarity_threshold, mean_sim_good, mean_sim_bad
     ]
     
-    # Aggiungi i dati per ogni peer
+    # Add data for each peer
     for i in range(X):
         trust_val = trust_vector[i] if i < len(trust_vector) else 0.0
         struct_consistency = structural_consistencies[i] if i < len(structural_consistencies) else 1.0
@@ -152,7 +154,7 @@ def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round,
             trust_val, struct_consistency, updates_contrib, is_malicious, is_corrupted
         ])
     
-    # Scrivi i dati nel CSV
+    # Write data to CSV
     with open(csv_filename, 'a', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(row_data)
@@ -161,25 +163,24 @@ def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round,
 
 
 def init_DAG(initial_params):
-    global dag, selector, peers, central_node, malicious_indices, num_malicious, num_corrupted, corrupted_indices, last_node_prev_round, pos
+    global dag, selector, peers, central_node, malicious_indices, num_malicious, num_corrupted, corrupted_indices, last_node_prev_round, pos, checkpoint_corrupted_conf, checkpoint_malicious_conf
     #print(initial_params[0])
-    # Inizializza il DAG e il selettore di tip
+    # Initialize DAG and tip selector
     dag = DAG.DAG()
     selector = TipSelectionAlgorithm.TrustInformedTipSelector(
         similarity_method='cosine',
     )
-
-    # Crea X peer
+    # Create X peers
     peers = [Peer.Peer(dag, selector, name=f"Peer{i}", id=i) for i in range(X)]
-    central_node = Peer.Peer(dag, selector, name="CentralNode", id=X)  # Nodo centrale per aggregazione
+    central_node = Peer.Peer(dag, selector, name="CentralNode", id=X)  # Central node for aggregation
 
-    # Seleziona casualmente i peer malevoli in base alla percentuale
+    # Randomly select malicious peers based on percentage
     num_malicious = int(X * malicious_percentage)
     malicious_indices = np.random.choice(X, num_malicious, replace=False)
     for idx in malicious_indices:
         peers[idx].malicious = True
 
-    # Seleziona casualmente i peer corrotti in base alla percentuale
+    # Randomly select corrupted peers based on percentage
     num_corrupted = int(X * corrupted_percentage)
     corrupted_indices = np.random.choice([i for i in range(X) if i not in malicious_indices], num_corrupted, replace=False)
     for idx in corrupted_indices:
@@ -203,26 +204,26 @@ def init_DAG(initial_params):
     
     genesis = DAGNode.DAGNode(genesis_params, peer=central_node, epoch=0)
     central_node.manual_add_node(genesis, [])
-    pos = nx.spring_layout(dag.graph, seed=42)  # layout iniziale
+    pos = nx.spring_layout(dag.graph, seed=42)  # initial layout
     dag_utils.draw_dag(dag, step=0, pos=pos)
     last_node_prev_round = genesis
     #second_node = DAGNode.DAGNode(np.zeros((3, 3)), peer=central_node)
     #dag.add_node(second_node, [])
     print("INITIALIZED GRAPH")
     
-    # Inizializza il logging CSV
+    # Initialize CSV logging
     init_csv_logging()
     
     return X,R,num_malicious,malicious_indices.tolist()
 
 
 def get_trust_vector(parameters_clients, epoch):
-    global dag, selector, peers, longest_ppath, step, added_node_ids, total_good_removed, total_malicious_confirmed, total_corrupted_confirmed, trust_vector, structural_consistencies, updates_contributions, last_node_prev_round, pos
+    global dag, selector, peers, longest_ppath, step, added_node_ids, total_good_removed, total_malicious_confirmed, total_corrupted_confirmed, trust_vector, structural_consistencies, updates_contributions, last_node_prev_round, pos, checkpoint_malicious_conf, checkpoint_corrupted_conf
     
-    #GIACOMO: Take the actual neural network parameters and put them in the DAG nodes
+    # Take the actual neural network parameters and put them in the DAG nodes
     for peer in peers:
         if peer.id in parameters_clients.keys():
-            print("NODO NUMERO " + str(peer.id))
+            print("NODE NUMBER " + str(peer.id))
             is_malicious = getattr(peer, "malicious", False)
             is_corrupted = getattr(peer, "corrupted", False)
             
@@ -245,13 +246,12 @@ def get_trust_vector(parameters_clients, epoch):
             node.malicious = is_malicious
             node.corrupted = is_corrupted
             node_id = peer.add_node(node)
-            #TODO: aggiornare all'eliminazione dei nodi (heaviest graph o prune) questa lista added_node_ids?
             added_node_ids.append(node_id)
             pos = nx.spring_layout(dag.graph, seed=42, pos=pos, fixed=list(pos.keys()))
             dag_utils.draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
             step += 1
 
-    print(f"\n\nFINE {epoch+1} ROUND\nTotale nodi: {len(dag.nodes)} - Totale tips: {len(dag.tips)}")
+    print(f"\n\nEND OF ROUND {epoch+1}\nTotal nodes: {len(dag.nodes)} - Total tips: {len(dag.tips)}")
     
     old_path = set(longest_ppath)
     # Heaviest subgraph computations
@@ -268,13 +268,11 @@ def get_trust_vector(parameters_clients, epoch):
     num_corrupted_confirmed = sum(1 for n in longest_ppath if getattr(dag.nodes.get(n, None), "corrupted", False))
     nodes_to_remove = [n for n in list(dag.graph.nodes) if n not in longest_ppath]
     num_good_removed = sum(1 for n in nodes_to_remove if not getattr(dag.nodes.get(n, None), "malicious", False) and not getattr(dag.nodes.get(n, None), "corrupted", False))
-    print(f"Malicious nodes confirmed: {num_malicious_confirmed - total_malicious_confirmed}")
-    print(f"Corrupted nodes confirmed: {num_corrupted_confirmed - total_corrupted_confirmed}")
-    print(f"Good nodes eliminated: {num_good_removed}")
-    
-    # Salva i dati prima del calcolo del trust vector
     num_malicious_confirmed_this_round = num_malicious_confirmed - total_malicious_confirmed
     num_corrupted_confirmed_this_round = num_corrupted_confirmed - total_corrupted_confirmed
+    print(f"Malicious nodes confirmed: {num_malicious_confirmed_this_round}")
+    print(f"Corrupted nodes confirmed: {num_corrupted_confirmed_this_round}")
+    print(f"Good nodes eliminated: {num_good_removed}")
     
     # Develop trust vector for each peer based on structural consistency and updates contributions
     for i, peer in enumerate(peers):
@@ -315,7 +313,7 @@ def get_trust_vector(parameters_clients, epoch):
             
             if not peer_has_node:
                 print(f"Peer {i} ({peer.name}): No node found in the graph for this FL round")
-                #The peer didn't participate in this round, so we assume update contributions is 0.5
+                # The peer didn't participate in this round, so we assume update contributions is 0.5
                 updates_contribution = trust_vector[i] if i < len(trust_vector) else 0.5
         if i >= len(updates_contributions):
             updates_contributions.append(updates_contribution)
@@ -331,7 +329,7 @@ def get_trust_vector(parameters_clients, epoch):
     print(f"Update Contributions vector: {updates_contributions}")
     print(f"Trust vector: {trust_vector}")
     
-    # Salva i dati del round nel CSV
+    # Save round data to CSV
     save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round, num_corrupted_confirmed_this_round)
     
     # Remove nodes outside of the heaviest subgraph
@@ -344,39 +342,36 @@ def get_trust_vector(parameters_clients, epoch):
     total_corrupted_confirmed = num_corrupted_confirmed
     
     if ((R/8)%epoch) == 0:
-        # Snellisci il grafo eliminando tutti i nodi fino all'ultima milestone
+        # Streamline the graph by removing all nodes up to the last milestone
         print(f"Pruning graph at epoch {epoch + 1} (R/2)")
         
-        # Trova tutti i nodi da rimuovere (tutti tranne quelli dalla milestone in poi)
+        # Find all nodes to remove (all except those from milestone onwards)
         nodes_to_prune = []
-        milestone_found = False
-        
-        # Trova l'ultima milestone (dovrebbe essere last_node_prev_round)
+        # Find the last milestone (should be last_node_prev_round)
         if last_node_prev_round:
-            # Trova tutti i nodi che precedono l'ultima milestone
+            # Find all nodes that precede the last milestone
             for node_id in list(dag.graph.nodes):
                 node = dag.nodes.get(node_id)
                 if node and node.id != last_node_prev_round.id:
-                    # Verifica se questo nodo è un predecessore dell'ultima milestone
+                    # Check if this node is a predecessor of the last milestone
                     if node.epoch < last_node_prev_round.epoch:
                         nodes_to_prune.append(node_id)
         
-        # Rimuovi i nodi trovati
+        # Remove found nodes
         for node_id in nodes_to_prune:
             if node_id in dag.graph.nodes:
                 dag.graph.remove_node(node_id)
                 dag.nodes.pop(node_id, None)
                 dag.tips.discard(node_id)
                 longest_ppath.discard(node_id)  # Remove from longest path set too
+                added_node_ids.remove(node_id) if node_id in added_node_ids else None
+        checkpoint_malicious_conf += total_malicious_confirmed
+        checkpoint_corrupted_conf += total_corrupted_confirmed
+        total_malicious_confirmed = 0
+        total_corrupted_confirmed = 0
         
         print(f"Removed {len(nodes_to_prune)} nodes during graph pruning")
         print(f"Remaining nodes: {len(dag.nodes)}")
-        
-    if epoch == R:
-        print("*****END OF TRUST VECTOR COMPUTATION*****")
-        print("Total good nodes removed:", total_good_removed)
-        print("Total malicious nodes confirmed:", total_malicious_confirmed)
-        print("Total corrupted nodes confirmed:", total_corrupted_confirmed)
     
     """
     # Update similarity threshold with piecewise linear growth
@@ -416,7 +411,7 @@ def get_trust_vector(parameters_clients, epoch):
 def milestone(new_nn_params, epoch):
     global dag, central_node, longest_ppath, added_node_ids, step, last_node_prev_round, pos
     
-    #CREATING MILESTONE
+    # CREATING MILESTONE
     last_node = None
     for node_id in longest_ppath:
         try:

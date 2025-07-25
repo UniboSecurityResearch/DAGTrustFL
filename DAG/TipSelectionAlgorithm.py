@@ -233,9 +233,9 @@ class OLD_MyCustomTipSelector(TipSelectionAlgorithm):
 
 class TrustInformedTipSelector(TipSelectionAlgorithm):
     #TODO:
-    #mettere il similarity threshold variabile in base all'epoch
+    # make the similarity threshold variable based on the epoch
     def __init__(self, max_depth=3, similarity_threshold=0.30, cw_penalty_factor=0.05, similarity_method='cosine'):
-        self.max_depth = max_depth #chi, depth of the past cone to inspect
+        self.max_depth = max_depth # depth of the past cone to inspect
         self.similarity_threshold = similarity_threshold  # Optimized from extended FL testing
         self.cw_penalty_factor = cw_penalty_factor  # Factor to penalize high CW nodes
         self.similarity_method = similarity_method  # Method for similarity calculation
@@ -323,7 +323,7 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
                     current_parameters = dag.nodes[current].data
                     # Get parent nodes of current node
                     parent_nodes = list(dag.graph.successors(current))
-                    print(f"NOME: {dag.nodes[current].peer.name}")
+                    print(f"NAME: {dag.nodes[current].peer.name}")
                     if dag.nodes[current].peer.name != "CentralNode":
                         # Compare current node's parameters with each parent's parameters
                         for parent in parent_nodes:
@@ -437,7 +437,7 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
                     # Step 3: select the best unconfirmed nodes
                     repeat = False
                     new_selected = [node for node, _ in confirmed_scores[:2 - len(selected)]]
-                    #Step 4: Examine the past cone of the selected nodes
+                    # Step 4: Examine the past cone of the selected nodes
                     # Check if any node in the past cone has low similarity with its parents
                     nodes_to_remove = self.check_past_cone_similarity(new_selected, dag)
                     # Remove nodes that failed the similarity check (with corrupted behavior)

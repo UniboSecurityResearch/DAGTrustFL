@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Advanced analysis script che genera raccomandazioni per soglie adattive
-basate sui risultati del test esteso.
+Advanced analysis script that generates recommendations for adaptive thresholds
+based on extended test results.
 """
 
 import sys
@@ -12,19 +12,19 @@ import numpy as np
 import parameter_utils
 
 class AdaptiveThresholdRecommender:
-    """Classe per generare raccomandazioni di soglie adattive."""
+    """Class for generating adaptive threshold recommendations."""
     
     def __init__(self, test_results):
         """
         Args:
-            test_results: Risultati dal test esteso nel formato:
+            test_results: Results from extended test in format:
                 {epoch: {method: {discrimination, clean_avg, poisoned_avg, ...}}}
         """
         self.results = test_results
         self.methods = ['statistical', 'combined', 'euclidean']
     
     def analyze_temporal_patterns(self):
-        """Analizza i pattern temporali della discriminazione."""
+        """Analyze temporal patterns of discrimination."""
         print("="*80)
         print("ADAPTIVE THRESHOLD ANALYSIS")
         print("="*80)
@@ -32,7 +32,7 @@ class AdaptiveThresholdRecommender:
         for method in self.methods:
             print(f"\n{method.upper()} Analysis:")
             
-            # Estrai dati temporali
+            # Extract temporal data
             epochs = sorted(self.results.keys())
             discriminations = []
             clean_avgs = []
@@ -51,27 +51,27 @@ class AdaptiveThresholdRecommender:
             if not discriminations:
                 continue
                 
-            # Statistiche di base
+            # Basic statistics
             print(f"  Discrimination stats: min={min(discriminations):.6f}, "
                   f"max={max(discriminations):.6f}, avg={np.mean(discriminations):.6f}")
             print(f"  Threshold range: {min(thresholds):.6f} - {max(thresholds):.6f}")
             
-            # Raccomandazioni per soglie
+            # Threshold recommendations
             self.recommend_thresholds(method, discriminations, thresholds, clean_avgs, poisoned_avgs)
     
     def recommend_thresholds(self, method, discriminations, thresholds, clean_avgs, poisoned_avgs):
-        """Genera raccomandazioni di soglie per un metodo."""
+        """Generate threshold recommendations for a method."""
         
-        # Soglia conservativa (massimo clean_avg osservato)
+        # Conservative threshold (maximum observed clean_avg)
         conservative_threshold = max(clean_avgs) if clean_avgs else 0.5
         
-        # Soglia aggressiva (minimo clean_avg osservato)
+        # Aggressive threshold (minimum observed clean_avg)
         aggressive_threshold = min(clean_avgs) if clean_avgs else 0.5
         
-        # Soglia adattiva (media dei threshold ottimali)
+        # Adaptive threshold (average of optimal thresholds)
         adaptive_threshold = np.mean(thresholds) if thresholds else 0.5
         
-        # Soglia dinamica (basata sulla variabilità)
+        # Dynamic threshold (based on variability)
         threshold_std = np.std(thresholds) if thresholds else 0
         margin = 2 * threshold_std  # 2-sigma margin
         dynamic_threshold = adaptive_threshold - margin
@@ -82,16 +82,16 @@ class AdaptiveThresholdRecommender:
         print(f"    Adaptive (balanced):    {adaptive_threshold:.6f}")
         print(f"    Dynamic (with margin):  {dynamic_threshold:.6f}")
         
-        # Calcola efficacia di ciascuna soglia
+        # Calculate effectiveness of each threshold
         self.evaluate_threshold_effectiveness(method, thresholds, clean_avgs, poisoned_avgs)
     
     def evaluate_threshold_effectiveness(self, method, thresholds, clean_avgs, poisoned_avgs):
-        """Valuta l'efficacia delle soglie raccomandate."""
+        """Evaluate effectiveness of recommended thresholds."""
         
         if not thresholds or not clean_avgs or not poisoned_avgs:
             return
             
-        # Test delle soglie raccomandate
+        # Test recommended thresholds
         test_thresholds = {
             'conservative': max(clean_avgs),
             'aggressive': min(clean_avgs),
@@ -101,8 +101,8 @@ class AdaptiveThresholdRecommender:
         
         print(f"  Effectiveness Analysis:")
         for thresh_name, thresh_value in test_thresholds.items():
-            # Simula detection rates
-            # (In un test reale, useresti dati ground truth)
+            # Simulate detection rates
+            # (In a real test, you would use ground truth data)
             tpr_estimate = sum(1 for p_avg in poisoned_avgs if p_avg < thresh_value) / len(poisoned_avgs)
             fpr_estimate = sum(1 for c_avg in clean_avgs if c_avg < thresh_value) / len(clean_avgs)
             
@@ -110,12 +110,12 @@ class AdaptiveThresholdRecommender:
                   f"TPR≈{tpr_estimate:.2f}, FPR≈{fpr_estimate:.2f}")
     
     def generate_config_recommendations(self):
-        """Genera raccomandazioni di configurazione finale."""
+        """Generate final configuration recommendations."""
         print(f"\n" + "="*80)
         print("CONFIGURATION RECOMMENDATIONS")
         print("="*80)
         
-        # Analizza quale metodo è più stabile nel tempo
+        # Analyze which method is most stable over time
         stability_scores = {}
         
         for method in self.methods:
@@ -127,7 +127,7 @@ class AdaptiveThresholdRecommender:
                     discriminations.append(self.results[epoch][method]['discrimination'])
             
             if discriminations:
-                # Stabilità = 1 / coefficient of variation
+                # Stability = 1 / coefficient of variation
                 avg_disc = np.mean(discriminations)
                 std_disc = np.std(discriminations)
                 cv = std_disc / avg_disc if avg_disc > 0 else float('inf')
@@ -138,7 +138,7 @@ class AdaptiveThresholdRecommender:
                     'cv': cv
                 }
         
-        # Ordina per combinazione di discriminazione e stabilità
+        # Sort by combination of discrimination and stability
         def combined_score(method_data):
             return method_data['avg_discrimination'] * method_data['stability']
         
@@ -150,7 +150,7 @@ class AdaptiveThresholdRecommender:
         print(f"  Stability Score: {stability_scores[best_method]['stability']:.3f}")
         print(f"  Coefficient of Variation: {stability_scores[best_method]['cv']:.3f}")
         
-        # Genera configurazione finale
+        # Generate final configuration
         epochs = sorted(self.results.keys())
         thresholds = []
         for epoch in epochs:
@@ -173,9 +173,9 @@ class AdaptiveThresholdRecommender:
         return best_method, final_threshold
 
 def main():
-    """Simula i risultati del test per demo."""
+    """Simulate test results for demo."""
     
-    # Simulated results dal test esteso (basato sui risultati reali)
+    # Simulated results from extended test (based on real results)
     simulated_results = {
         0: {  # Epoch 1
             'statistical': {'discrimination': 0.005066, 'clean_clean_avg': 0.0972, 'clean_poisoned_avg': 0.1022},
@@ -209,7 +209,7 @@ def main():
         }
     }
     
-    # Analizza e genera raccomandazioni
+    # Analyze and generate recommendations
     recommender = AdaptiveThresholdRecommender(simulated_results)
     recommender.analyze_temporal_patterns()
     best_method, final_threshold = recommender.generate_config_recommendations()

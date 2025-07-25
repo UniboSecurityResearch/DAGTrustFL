@@ -265,90 +265,90 @@ def analyze_euclidean_distance_properties():
     Analyze the mathematical properties and correctness of our Euclidean distance implementation
     for neural network parameters.
     """
-    print("\n=== ANALISI DELLE PROPRIETÀ DELLA DISTANZA EUCLIDEA ===\n")
+    print("\n=== ANALYSIS OF EUCLIDEAN DISTANCE PROPERTIES ===\n")
     
-    # 1. Verificare che il flatten mantenga il senso matematico
-    print("1. FLATTEN E SENSO MATEMATICO:")
-    print("   - I parametri di una rete neurale sono tensori multi-dimensionali")
-    print("   - Il flatten li trasforma in un singolo vettore preservando tutti i valori")
-    print("   - La distanza euclidea misura la 'distanza' globale tra due modelli")
-    print("   - Matematicamente corretto: d(x,y) = √(Σᵢ(xᵢ - yᵢ)²)")
+    # 1. Verify that flatten maintains mathematical sense
+    print("1. FLATTEN AND MATHEMATICAL SENSE:")
+    print("   - Neural network parameters are multi-dimensional tensors")
+    print("   - Flatten transforms them into a single vector preserving all values")
+    print("   - Euclidean distance measures the global 'distance' between two models")
+    print("   - Mathematically correct: d(x,y) = √(Σᵢ(xᵢ - yᵢ)²)")
     
-    # Test con parametri di diverse forme
-    # Caso 1: Matrice 2x2
+    # Test with parameters of different shapes
+    # Case 1: 2x2 matrix
     matrix_2x2 = np.array([[1, 2], [3, 4]])
     matrix_2x2_diff = np.array([[1.1, 2.1], [3.1, 4.1]])
     
-    # Caso 2: Stessa matrice come vettore 1x4  
+    # Case 2: Same matrix as 1x4 vector  
     vector_1x4 = np.array([1, 2, 3, 4])
     vector_1x4_diff = np.array([1.1, 2.1, 3.1, 4.1])
     
     dist_matrix = euclidean_distance_parameters(matrix_2x2, matrix_2x2_diff)
     dist_vector = euclidean_distance_parameters(vector_1x4, vector_1x4_diff)
     
-    print(f"\n   Test: matrice 2x2 vs vettore 1x4 (stessi valori)")
-    print(f"   Distanza matrice: {dist_matrix:.6f}")
-    print(f"   Distanza vettore: {dist_vector:.6f}")
-    print(f"   Differenza: {abs(dist_matrix - dist_vector):.10f} (dovrebbe essere ~0)")
+    print(f"\n   Test: 2x2 matrix vs 1x4 vector (same values)")
+    print(f"   Matrix distance: {dist_matrix:.6f}")
+    print(f"   Vector distance: {dist_vector:.6f}")
+    print(f"   Difference: {abs(dist_matrix - dist_vector):.10f} (should be ~0)")
     
-    # 2. Confronto con implementazione manuale
-    print("\n2. VERIFICA CON CALCOLO MANUALE:")
-    manual_calc = np.sqrt(np.sum((0.1)**2 * 4))  # 4 elementi, ognuno differisce di 0.1
-    print(f"   Calcolo manuale: √(4 × 0.1²) = {manual_calc:.6f}")
-    print(f"   Nostra implementazione: {dist_matrix:.6f}")
+    # 2. Comparison with manual implementation
+    print("\n2. VERIFICATION WITH MANUAL CALCULATION:")
+    manual_calc = np.sqrt(np.sum((0.1)**2 * 4))  # 4 elements, each differs by 0.1
+    print(f"   Manual calculation: √(4 × 0.1²) = {manual_calc:.6f}")
+    print(f"   Our implementation: {dist_matrix:.6f}")
     print(f"   Match: {abs(manual_calc - dist_matrix) < 1e-10}")
     
-    # 3. Proprietà matematiche
-    print("\n3. PROPRIETÀ MATEMATICHE:")
+    # 3. Mathematical properties
+    print("\n3. MATHEMATICAL PROPERTIES:")
     
-    # Proprietà 1: Non-negatività
-    print("   a) Non-negatività: d(x,y) ≥ 0")
+    # Property 1: Non-negativity
+    print("   a) Non-negativity: d(x,y) ≥ 0")
     assert dist_matrix >= 0
-    print("      ✅ Verificata")
+    print("      ✅ Verified")
     
-    # Proprietà 2: Identità
-    print("   b) Identità: d(x,x) = 0")
+    # Property 2: Identity
+    print("   b) Identity: d(x,x) = 0")
     self_dist = euclidean_distance_parameters(matrix_2x2, matrix_2x2)
     assert self_dist == 0
-    print("      ✅ Verificata")
+    print("      ✅ Verified")
     
-    # Proprietà 3: Simmetria  
-    print("   c) Simmetria: d(x,y) = d(y,x)")
+    # Property 3: Symmetry  
+    print("   c) Symmetry: d(x,y) = d(y,x)")
     dist_ab = euclidean_distance_parameters(matrix_2x2, matrix_2x2_diff)
     dist_ba = euclidean_distance_parameters(matrix_2x2_diff, matrix_2x2)
     assert abs(dist_ab - dist_ba) < 1e-10
-    print("      ✅ Verificata")
+    print("      ✅ Verified")
     
-    # Proprietà 4: Disuguaglianza triangolare
-    print("   d) Disuguaglianza triangolare: d(x,z) ≤ d(x,y) + d(y,z)")
+    # Property 4: Triangle inequality
+    print("   d) Triangle inequality: d(x,z) ≤ d(x,y) + d(y,z)")
     matrix_c = np.array([[2, 3], [4, 5]])
     dist_ac = euclidean_distance_parameters(matrix_2x2, matrix_c)
     dist_bc = euclidean_distance_parameters(matrix_2x2_diff, matrix_c)
     triangle_ineq = dist_ac <= (dist_ab + dist_bc + 1e-10)  # small tolerance
     print(f"      d(a,c)={dist_ac:.6f} ≤ d(a,b)+d(b,c)={dist_ab:.6f}+{dist_bc:.6f}={dist_ab+dist_bc:.6f}")
-    print(f"      ✅ {'Verificata' if triangle_ineq else 'FALLITA'}")
+    print(f"      ✅ {'Verified' if triangle_ineq else 'FAILED'}")
     
-    # 4. Comportamento con reti neurali reali
-    print("\n4. COMPORTAMENTO CON RETI NEURALI:")
+    # 4. Behavior with real neural networks
+    print("\n4. BEHAVIOR WITH NEURAL NETWORKS:")
     
-    # Simula parametri di una piccola rete
-    torch.manual_seed(42)  # Per riproducibilità
+    # Simulate parameters of a small network
+    torch.manual_seed(42)  # For reproducibility
     
     net_params_1 = OrderedDict([
-        ('conv1.weight', torch.randn(8, 3, 3, 3) * 0.1),  # Pesi piccoli
+        ('conv1.weight', torch.randn(8, 3, 3, 3) * 0.1),  # Small weights
         ('conv1.bias', torch.randn(8) * 0.01),
         ('fc1.weight', torch.randn(10, 512) * 0.1),
         ('fc1.bias', torch.randn(10) * 0.01)
     ])
     
-    # Parametri simili (come dopo una epoca di training)
+    # Similar parameters (like after one training epoch)
     net_params_2 = OrderedDict()
     for name, param in net_params_1.items():
-        # Aggiungi piccole variazioni
+        # Add small variations
         noise = torch.randn_like(param) * 0.001
         net_params_2[name] = param + noise
     
-    # Parametri molto diversi
+    # Very different parameters
     net_params_3 = OrderedDict([
         ('conv1.weight', torch.randn(8, 3, 3, 3) * 0.1),
         ('conv1.bias', torch.randn(8) * 0.01), 
@@ -359,52 +359,52 @@ def analyze_euclidean_distance_properties():
     dist_similar = euclidean_distance_parameters(net_params_1, net_params_2)
     dist_different = euclidean_distance_parameters(net_params_1, net_params_3)
     
-    print(f"   Distanza tra parametri simili: {dist_similar:.6f}")
-    print(f"   Distanza tra parametri diversi: {dist_different:.6f}")
-    print(f"   Rapporto (diversi/simili): {dist_different/dist_similar:.2f}x")
-    print(f"   ✅ La distanza discrimina correttamente tra parametri simili e diversi")
+    print(f"   Distance between similar parameters: {dist_similar:.6f}")
+    print(f"   Distance between different parameters: {dist_different:.6f}")
+    print(f"   Ratio (different/similar): {dist_different/dist_similar:.2f}x")
+    print(f"   ✅ Distance correctly discriminates between similar and different parameters")
     
-    print("\n=== CONCLUSIONI ===")
-    print("✅ L'implementazione è matematicamente corretta")
-    print("✅ Il flatten preserva tutte le informazioni")
-    print("✅ Tutte le proprietà metriche sono soddisfatte")
-    print("✅ Comportamento appropriato per parametri di reti neurali")
+    print("\n=== CONCLUSIONS ===")
+    print("✅ Implementation is mathematically correct")
+    print("✅ Flatten preserves all information")
+    print("✅ All metric properties are satisfied")
+    print("✅ Appropriate behavior for neural network parameters")
 
 
 def test_normalized_distance_range():
     """
-    Test che la distanza normalizzata restituisca valori nell'intervallo [0,1]
-    usando la formula: Dis_norm(M1, M2) = Dis(M1, M2) / (Dis(M1, 0) + Dis(M2, 0))
+    Test that normalized distance returns values in the [0,1] interval
+    using the formula: Dis_norm(M1, M2) = Dis(M1, M2) / (Dis(M1, 0) + Dis(M2, 0))
     """
-    print("\n=== TEST DISTANZA NORMALIZZATA [0,1] - NUOVA FORMULA ===\n")
+    print("\n=== TEST NORMALIZED DISTANCE [0,1] - NEW FORMULA ===\n")
     
-    # Test 1: Parametri identici dovrebbero dare 0
+    # Test 1: Identical parameters should give 0
     params_identical = OrderedDict([
         ('layer1.weight', torch.tensor([[1.0, 2.0], [3.0, 4.0]])),
         ('layer1.bias', torch.tensor([0.5, -0.5]))
     ])
     
     norm_dist_identical = normalized_euclidean_proximity_parameters(params_identical, params_identical)
-    print(f"Test 1 - Parametri identici: {norm_dist_identical:.6f} (dovrebbe essere 0.0)")
+    print(f"Test 1 - Identical parameters: {norm_dist_identical:.6f} (should be 0.0)")
     assert norm_dist_identical == 0.0, f"Expected 0.0, got {norm_dist_identical}"
-    assert 0.0 <= norm_dist_identical <= 1.0, "Valore fuori dall'intervallo [0,1]"
+    assert 0.0 <= norm_dist_identical <= 1.0, "Value outside [0,1] range"
     
-    # Test 2: Parametri leggermente diversi
+    # Test 2: Slightly different parameters
     params_similar = OrderedDict([
         ('layer1.weight', torch.tensor([[1.01, 2.01], [3.01, 4.01]])),
         ('layer1.bias', torch.tensor([0.51, -0.49]))
     ])
     
     norm_dist_similar = normalized_euclidean_proximity_parameters(params_identical, params_similar)
-    print(f"Test 2 - Parametri simili: {norm_dist_similar:.6f}")
-    assert 0.0 <= norm_dist_similar <= 1.0, "Valore fuori dall'intervallo [0,1]"
-    assert norm_dist_similar > 0.0, "Parametri diversi dovrebbero avere distanza > 0"
+    print(f"Test 2 - Similar parameters: {norm_dist_similar:.6f}")
+    assert 0.0 <= norm_dist_similar <= 1.0, "Value outside [0,1] range"
+    assert norm_dist_similar > 0.0, "Different parameters should have distance > 0"
     
-    # Test 3: Verifica della formula manualmente
-    # Calcoliamo manualmente per verificare
+    # Test 3: Verify formula manually
+    # Calculate manually to verify
     dist_12 = euclidean_distance_parameters(params_identical, params_similar)
     
-    # Creiamo parametri zero
+    # Create zero parameters
     zero_params = OrderedDict([
         ('layer1.weight', torch.zeros(2, 2)),
         ('layer1.bias', torch.zeros(2))
@@ -415,45 +415,45 @@ def test_normalized_distance_range():
     
     expected_norm = dist_12 / (dist_1_to_zero + dist_2_to_zero)
     
-    print(f"Test 3 - Verifica formula:")
+    print(f"Test 3 - Formula verification:")
     print(f"   Dis(M1, M2) = {dist_12:.6f}")
     print(f"   Dis(M1, 0) = {dist_1_to_zero:.6f}")
     print(f"   Dis(M2, 0) = {dist_2_to_zero:.6f}")
-    print(f"   Formula manuale: {expected_norm:.6f}")
-    print(f"   Funzione: {norm_dist_similar:.6f}")
-    assert abs(expected_norm - norm_dist_similar) < 1e-10, "Formula non corretta"
+    print(f"   Manual formula: {expected_norm:.6f}")
+    print(f"   Function: {norm_dist_similar:.6f}")
+    assert abs(expected_norm - norm_dist_similar) < 1e-10, "Formula incorrect"
     
-    # Test 4: Parametri molto diversi
+    # Test 4: Very different parameters
     params_different = OrderedDict([
         ('layer1.weight', torch.tensor([[10.0, 20.0], [30.0, 40.0]])),
         ('layer1.bias', torch.tensor([5.0, -5.0]))
     ])
     
     norm_dist_different = normalized_euclidean_proximity_parameters(params_identical, params_different)
-    print(f"Test 4 - Parametri molto diversi: {norm_dist_different:.6f}")
-    assert 0.0 <= norm_dist_different <= 1.0, "Valore fuori dall'intervallo [0,1]"
+    print(f"Test 4 - Very different parameters: {norm_dist_different:.6f}")
+    assert 0.0 <= norm_dist_different <= 1.0, "Value outside [0,1] range"
     
-    # Test 5: Verifica proprietà matematiche
-    print(f"\nTest 5 - Proprietà matematiche:")
+    # Test 5: Verify mathematical properties
+    print(f"\nTest 5 - Mathematical properties:")
     
-    # Simmetria: dist_norm(A,B) = dist_norm(B,A)
+    # Symmetry: dist_norm(A,B) = dist_norm(B,A)
     norm_AB = normalized_euclidean_proximity_parameters(params_identical, params_similar)
     norm_BA = normalized_euclidean_proximity_parameters(params_similar, params_identical)
-    print(f"   Simmetria: norm(A,B)={norm_AB:.6f}, norm(B,A)={norm_BA:.6f}")
-    assert abs(norm_AB - norm_BA) < 1e-10, "La distanza normalizzata non è simmetrica"
+    print(f"   Symmetry: norm(A,B)={norm_AB:.6f}, norm(B,A)={norm_BA:.6f}")
+    assert abs(norm_AB - norm_BA) < 1e-10, "Normalized distance is not symmetric"
     
-    # Test 6: Comportamento con parametri all'origine
+    # Test 6: Behavior with parameters at origin
     zero_params_test = OrderedDict([
         ('layer1.weight', torch.zeros(2, 2)),
         ('layer1.bias', torch.zeros(2))
     ])
     
     norm_zero = normalized_euclidean_proximity_parameters(zero_params_test, zero_params_test)
-    print(f"Test 6 - Parametri zero: {norm_zero:.6f} (dovrebbe essere 0.0)")
-    assert norm_zero == 0.0, "Parametri zero dovrebbero avere distanza 0"
+    print(f"Test 6 - Zero parameters: {norm_zero:.6f} (should be 0.0)")
+    assert norm_zero == 0.0, "Zero parameters should have distance 0"
     
-    # Test 7: Progressione di differenze con scaling
-    print(f"\nTest 7 - Progressione con scaling:")
+    # Test 7: Progression of differences with scaling
+    print(f"\nTest 7 - Progression with scaling:")
     base_params = OrderedDict([('w', torch.tensor([[1.0]]))])
     
     factors = [0.0, 0.1, 0.5, 1.0, 2.0, 5.0]
@@ -464,24 +464,24 @@ def test_normalized_distance_range():
         dist = normalized_euclidean_proximity_parameters(base_params, test_params)
         distances.append(dist)
         
-        # Verifica manuale usando la funzione euclidean_distance_parameters
-        d12 = euclidean_distance_parameters(base_params, test_params)  # distanza tra parametri
+        # Manual verification using euclidean_distance_parameters function
+        d12 = euclidean_distance_parameters(base_params, test_params)  # distance between parameters
         
         zero_params = OrderedDict([('w', torch.tensor([[0.0]]))])
-        d10 = euclidean_distance_parameters(base_params, zero_params)  # distanza del primo parametro dall'origine  
-        d20 = euclidean_distance_parameters(test_params, zero_params)  # distanza del secondo parametro dall'origine
+        d10 = euclidean_distance_parameters(base_params, zero_params)  # distance of first parameter from origin  
+        d20 = euclidean_distance_parameters(test_params, zero_params)  # distance of second parameter from origin
         expected = d12 / (d10 + d20) if (d10 + d20) > 0 else 0.0
         
         print(f"   Factor {factor:4.1f}: norm_dist = {dist:.6f}, expected = {expected:.6f}")
-        assert abs(dist - expected) < 1e-10, f"Calcolo errato per factor {factor}: {dist} vs {expected}"
-        assert 0.0 <= dist <= 1.0, f"Valore fuori dall'intervallo [0,1] per factor {factor}"
+        assert abs(dist - expected) < 1e-10, f"Wrong calculation for factor {factor}: {dist} vs {expected}"
+        assert 0.0 <= dist <= 1.0, f"Value outside [0,1] range for factor {factor}"
     
-    print(f"\n✅ Tutti i test superati!")
-    print(f"✅ Tutti i valori sono nell'intervallo [0,1]")
-    print(f"✅ Formula Dis_norm(M1, M2) = Dis(M1, M2) / (Dis(M1, 0) + Dis(M2, 0)) implementata correttamente")
-    print(f"✅ Proprietà matematiche verificate")
-    print(f"✅ Parametri identici → distanza = 0")
-    print(f"✅ Distanza normalizzata rispetto alle magnitude dei parametri")
+    print(f"\n✅ All tests passed!")
+    print(f"✅ All values are in [0,1] range")
+    print(f"✅ Formula Dis_norm(M1, M2) = Dis(M1, M2) / (Dis(M1, 0) + Dis(M2, 0)) implemented correctly")
+    print(f"✅ Mathematical properties verified")
+    print(f"✅ Identical parameters → distance = 0")
+    print(f"✅ Distance normalized with respect to parameter magnitudes")
 
 
 def extract_last_layer_gradients(global_model_params, local_model_params):
@@ -647,10 +647,10 @@ def cos_sim_simple(model1, model2):
     return ((np.mean(similarity) - np.min(similarity)) / (np.max(similarity) - np.min(similarity)))
 
 
-# Opzione 1: Confronto con hash (più veloce ma meno preciso)
+# Option 1: Comparison with hash (faster but less precise)
 def models_are_different_hash(params1, params2):
     return hash(str(params1)) != hash(str(params2))
-# Opzione 2: Usando torch.equal se sono tutti tensori PyTorch
+# Option 2: Using torch.equal if they are all PyTorch tensors
 def models_are_equal_torch(params1, params2):
     import torch
     if isinstance(params1, dict) and isinstance(params2, dict):
@@ -732,4 +732,4 @@ if __name__ == "__main__":
     #test_normalized_distance_range()
     test_last_layer_extraction()
     #test_cosine_similarity_defense()
-    
+

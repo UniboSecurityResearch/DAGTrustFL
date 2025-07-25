@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Test esteso per simulare multiple round di federated learning con label flipping attack.
-Questo script simula un esperimento completo usando il framework esistente per vedere
-come si comportano i meccanismi di similitudine attraverso diversi round di training.
+Extended test to simulate multiple federated learning rounds with label flipping attack.
+This script simulates a complete experiment using the existing framework to see
+how similarity mechanisms behave across different training rounds.
 """
 
 import sys
@@ -35,21 +35,21 @@ from client import Client
 from loguru import logger
 
 class FL_SimilarityTester:
-    """Classe per testare la similitudine attraverso più round di FL."""
+    """Class to test similarity across multiple FL rounds."""
     
     def __init__(self, num_workers=10, num_poisoned=3, num_epochs=200, workers_per_round=8):
         self.num_workers = num_workers
         self.num_poisoned = num_poisoned
         self.num_epochs = num_epochs
         self.workers_per_round = workers_per_round
-        self.poisoned_indices = list(range(num_poisoned))  # Prime N workers poisoned
+        self.poisoned_indices = list(range(num_poisoned))  # First N workers poisoned
         
-        # Risultati per analisi dettagliata
+        # Results for detailed analysis
         self.results_by_epoch = {}
         self.similarity_evolution = {method: [] for method in self.get_methods()}
         
-        # Analisi approfondita per threshold detection
-        self.detailed_similarities = []  # Lista di tutte le similitudini per epoch
+        # In-depth analysis for threshold detection
+        self.detailed_similarities = []  # List of all similarities per epoch
         self.threshold_analysis = {
             'optimal_thresholds': [],
             'accuracy_per_threshold': [],
@@ -57,23 +57,23 @@ class FL_SimilarityTester:
             'false_negative_rates': []
         }
         
-        # Statistiche per valutare l'efficacia
+        # Statistics to evaluate effectiveness
         self.detection_stats = {
-            'true_positives': [],  # Poisoned correttamente identificati
-            'false_positives': [], # Clean identificati come poisoned
-            'true_negatives': [],  # Clean correttamente identificati
-            'false_negatives': []  # Poisoned identificati come clean
+            'true_positives': [],  # Poisoned correctly identified
+            'false_positives': [], # Clean identified as poisoned
+            'true_negatives': [],  # Clean correctly identified
+            'false_negatives': []  # Poisoned identified as clean
         }
         
-        # Setup del sistema FL
+        # FL system setup
         self.setup_fl_system()
     
     def get_methods(self):
-        """Ritorna i metodi di similitudine da testare."""
+        """Returns similarity methods to test."""
         return ['cosine_original']
     
     def setup_fl_system(self):
-        """Setup del sistema di federated learning."""
+        """Setup the federated learning system."""
         print(f"Setting up FL system: {self.num_workers} workers, {self.num_poisoned} poisoned")
         
         # Setup args
@@ -112,15 +112,15 @@ class FL_SimilarityTester:
         print("FL system setup completed")
     
     def select_workers_for_round(self, epoch):
-        """Seleziona workers per il round corrente."""
-        # Simula selezione casuale ma garantisce rappresentanza di entrambi i tipi
-        np.random.seed(epoch)  # Seed per riproducibilità
+        """Select workers for the current round."""
+        # Simulate random selection but ensure representation of both types
+        np.random.seed(epoch)  # Seed for reproducibility
         
-        # Assicurati di includere almeno alcuni poisoned e clean workers
+        # Ensure including at least some poisoned and clean workers
         min_poisoned = min(2, self.num_poisoned)
         min_clean = min(2, self.num_workers - self.num_poisoned)
         
-        # Seleziona workers poisoned
+        # Select poisoned workers
         available_poisoned = [i for i in self.poisoned_indices]
         selected_poisoned = np.random.choice(
             available_poisoned, 
@@ -128,7 +128,7 @@ class FL_SimilarityTester:
             replace=False
         ).tolist()
         
-        # Seleziona workers clean
+        # Select clean workers
         available_clean = [i for i in range(self.num_workers) if i not in self.poisoned_indices]
         remaining_slots = self.workers_per_round - len(selected_poisoned)
         selected_clean = np.random.choice(
@@ -138,16 +138,16 @@ class FL_SimilarityTester:
         ).tolist()
         
         selected_workers = selected_poisoned + selected_clean
-        np.random.shuffle(selected_workers)  # Mescola per ordine casuale
+        np.random.shuffle(selected_workers)  # Shuffle for random order
         
         return selected_workers
     
     def train_round(self, epoch, selected_workers):
-        """Allena i workers selezionati per un round."""
+        """Train selected workers for one round."""
         print(f"\n--- EPOCH {epoch+1} ---")
         print(f"Selected workers: {selected_workers}")
         
-        # Identifica poisoned vs clean nella selezione
+        # Identify poisoned vs clean in selection
         selected_poisoned = [w for w in selected_workers if w in self.poisoned_indices]
         selected_clean = [w for w in selected_workers if w not in self.poisoned_indices]
         
@@ -175,7 +175,7 @@ class FL_SimilarityTester:
         return parameters_dict, clean_params, poisoned_params, selected_workers
     
     def analyze_round_similarities(self, epoch, clean_params, poisoned_params, selected_workers):
-        """Analizza le similitudini per il round corrente con analisi dettagliata."""
+        """Analyze similarities for the current round with detailed analysis."""
         if len(clean_params) < 2 or len(poisoned_params) < 1:
             print(f"  Skipping similarity analysis - insufficient samples")
             return None
@@ -188,7 +188,7 @@ class FL_SimilarityTester:
         for method in methods:
             clean_clean_sims = []
             clean_poisoned_sims = []
-            all_similarities = []  # Per analisi threshold
+            all_similarities = []  # For threshold analysis
             all_labels = []        # True=clean, False=poisoned
             
             # Clean vs Clean (reference baseline)
@@ -209,7 +209,7 @@ class FL_SimilarityTester:
                         all_similarities.append(sim)
                         all_labels.append(False)  # Contains poisoned
             
-            # Calcola statistiche base
+            # Calculate basic statistics
             if clean_clean_sims and clean_poisoned_sims:
                 clean_avg = np.mean(clean_clean_sims)
                 clean_std = np.std(clean_clean_sims)
@@ -217,10 +217,10 @@ class FL_SimilarityTester:
                 poisoned_std = np.std(clean_poisoned_sims)
                 discrimination = abs(clean_avg - poisoned_avg)
                 
-                # Analisi distribuzione overlap
+                # Distribution overlap analysis
                 overlap_analysis = self.analyze_distribution_overlap(clean_clean_sims, clean_poisoned_sims)
                 
-                # Trova threshold ottimale per questo epoch
+                # Find optimal threshold for this epoch
                 optimal_threshold, threshold_stats = self.find_optimal_threshold(
                     all_similarities, all_labels, clean_avg, poisoned_avg
                 )
@@ -239,7 +239,7 @@ class FL_SimilarityTester:
                     'separability_ratio': discrimination / (clean_std + poisoned_std + 1e-8)
                 }
                 
-                # Salva per analisi temporale
+                # Save for temporal analysis
                 epoch_data = {
                     'epoch': epoch,
                     'discrimination': discrimination,
@@ -253,7 +253,7 @@ class FL_SimilarityTester:
                 }
                 self.similarity_evolution[method].append(epoch_data)
                 
-                # Salva dettagli per analisi finale
+                # Save details for final analysis
                 self.detailed_similarities.append({
                     'epoch': epoch,
                     'method': method,
@@ -265,7 +265,7 @@ class FL_SimilarityTester:
         return results
     
     def calculate_similarity(self, params1, params2, method):
-        """Calcola la similitudine usando il metodo specificato."""
+        """Calculate similarity using the specified method."""
         try:
             if method == 'cosine_original':
                 return parameter_utils.cos_sim_simple(params1, params2)
@@ -278,7 +278,7 @@ class FL_SimilarityTester:
             return None
     
     def aggregate_and_update(self, parameters_dict, selected_workers):
-        """Aggrega i parametri e aggiorna i clients."""
+        """Aggregate parameters and update clients."""
         # Filter out poisoned workers from aggregation
         clean_workers = [w for w in selected_workers if w not in self.poisoned_indices]
         
@@ -292,34 +292,34 @@ class FL_SimilarityTester:
         print(f"Aggregating parameters from {len(clean_workers)} clean workers: {clean_workers}")
         print(f"Excluding {len([w for w in selected_workers if w in self.poisoned_indices])} poisoned workers")
         
-        # Pesi uguali per semplicità (in realtà dovresti usare trust weights)
+        # Equal weights for simplicity (in reality you should use trust weights)
         trust_weights = [1.0] * len(parameters_list)
         
-        # Aggrega i parametri
+        # Aggregate parameters
         aggregated_params = average_nn_parameters(parameters_list, trust_weights)
         
-        # Aggiorna tutti i clients
+        # Update all clients
         for client in self.clients:
             client.update_nn_parameters(aggregated_params)
         
         return aggregated_params
     
     def run_fl_experiment(self):
-        """Esegue l'esperimento completo di FL."""
+        """Run the complete FL experiment."""
         print("="*80)
         print("STARTING FEDERATED LEARNING SIMILARITY EXPERIMENT")
         print("="*80)
         
         for epoch in range(self.num_epochs):
-            # Seleziona workers per questo round
+            # Select workers for this round
             selected_workers = self.select_workers_for_round(epoch)
             
-            # Allena per questo round
+            # Train for this round
             parameters_dict, clean_params, poisoned_params, selected_workers = self.train_round(
                 epoch, selected_workers
             )
             
-            # Analizza similitudini
+            # Analyze similarities
             results = self.analyze_round_similarities(
                 epoch, clean_params, poisoned_params, selected_workers
             )
@@ -328,25 +328,25 @@ class FL_SimilarityTester:
                 self.results_by_epoch[epoch] = results
                 self.print_epoch_results(epoch, results)
             
-            # Aggrega e aggiorna
+            # Aggregate and update
             aggregated_params = self.aggregate_and_update(parameters_dict, selected_workers)
             
             print(f"  Round {epoch+1} completed\n")
         
-        # Analisi finale
+        # Final analysis
         self.print_final_analysis()
     
     def print_epoch_results(self, epoch, results):
-        """Stampa i risultati dettagliati per un singolo epoch."""
+        """Print detailed results for a single epoch."""
         print(f"  📊 Similarity Results for Epoch {epoch+1}:")
         
-        # Ordina per discriminazione
+        # Sort by discrimination
         sorted_methods = sorted(results.keys(), key=lambda x: results[x]['discrimination'], reverse=True)
         
         for method in sorted_methods:
             r = results[method]
             
-            # Simboli per indicare la qualità
+            # Symbols to indicate quality
             if r['discrimination'] > 0.02:
                 quality_symbol = "🟢"  # Excellent
             elif r['discrimination'] > 0.01:
@@ -377,14 +377,14 @@ class FL_SimilarityTester:
         print()
     
     def print_final_analysis(self):
-        """Stampa l'analisi finale dell'esperimento con visualizzazioni e report dettagliato."""
+        """Print final experiment analysis with visualizations and detailed report."""
         print("\n" + "="*100)
         print("COMPREHENSIVE COSINE SIMILARITY ANALYSIS REPORT")
         print("="*100)
         
         methods = self.get_methods()
         
-        # Analizza l'evoluzione nel tempo
+        # Analyze evolution over time
         for method in methods:
             evolution = self.similarity_evolution[method]
             if not evolution:
@@ -397,7 +397,7 @@ class FL_SimilarityTester:
             print(f"\n🔍 {method.upper()} DETAILED ANALYSIS:")
             print("="*50)
             
-            # Statistiche di base
+            # Basic statistics
             print(f"📊 Discrimination Statistics:")
             print(f"   Average: {np.mean(discriminations):.6f}")
             print(f"   Std Dev: {np.std(discriminations):.6f}")
@@ -445,11 +445,11 @@ class FL_SimilarityTester:
             stability_rating = "EXCELLENT" if threshold_cv < 0.01 else "GOOD" if threshold_cv < 0.05 else "POOR"
             print(f"   Stability Rating: {stability_rating}")
         
-        # Crea visualizzazioni dettagliate
+        # Create detailed visualizations
         print(f"\n📊 Generating comprehensive visualizations...")
         self.create_visualizations()
         
-        # Crea report dettagliato
+        # Create detailed report
         print(f"\n📋 Generating detailed DataFrame report...")
         df_report = self.create_detailed_report()
         
@@ -516,13 +516,13 @@ class FL_SimilarityTester:
         print("\n" + "="*100)
     
     def analyze_distribution_overlap(self, clean_sims, poisoned_sims):
-        """Analizza l'overlap tra le distribuzioni clean e poisoned."""
+        """Analyze overlap between clean and poisoned distributions."""
         try:
-            # Calcola statistiche descrittive
+            # Calculate descriptive statistics
             clean_min, clean_max = min(clean_sims), max(clean_sims)
             poisoned_min, poisoned_max = min(poisoned_sims), max(poisoned_sims)
             
-            # Calcola overlap range
+            # Calculate overlap range
             overlap_start = max(clean_min, poisoned_min)
             overlap_end = min(clean_max, poisoned_max)
             
@@ -531,11 +531,11 @@ class FL_SimilarityTester:
                 clean_range = clean_max - clean_min
                 poisoned_range = poisoned_max - poisoned_min
                 
-                # Percentuale di overlap
+                # Overlap percentage
                 clean_overlap_pct = overlap_range / (clean_range + 1e-8) * 100
                 poisoned_overlap_pct = overlap_range / (poisoned_range + 1e-8) * 100
                 
-                # Separazione delle mediane
+                # Median separation
                 median_separation = abs(np.median(clean_sims) - np.median(poisoned_sims))
                 
                 return {
@@ -560,14 +560,14 @@ class FL_SimilarityTester:
             return {'has_overlap': True, 'overlap_range': float('inf')}
     
     def find_optimal_threshold(self, similarities, labels, clean_avg, poisoned_avg):
-        """Trova il threshold ottimale per massimizzare l'accuratezza di detection."""
+        """Find optimal threshold to maximize detection accuracy."""
         if len(similarities) == 0 or len(labels) == 0:
             return (clean_avg + poisoned_avg) / 2, {'accuracy': 0, 'precision': 0, 'recall': 0}
         
         similarities = np.array(similarities)
         labels = np.array(labels)  # True=clean, False=poisoned
         
-        # Test diversi threshold
+        # Test different thresholds
         min_sim, max_sim = np.min(similarities), np.max(similarities)
         thresholds = np.linspace(min_sim, max_sim, 100)
         
@@ -576,14 +576,14 @@ class FL_SimilarityTester:
         best_stats = {'accuracy': 0, 'precision': 0, 'recall': 0, 'f1': 0}
         
         for threshold in thresholds:
-            # Predizioni: similarity >= threshold -> clean (True), < threshold -> poisoned (False)
+            # Predictions: similarity >= threshold -> clean (True), < threshold -> poisoned (False)
             predictions = similarities >= threshold
             
-            # Calcola metriche
-            tp = np.sum((predictions == True) & (labels == True))   # Clean predetto come clean
-            tn = np.sum((predictions == False) & (labels == False)) # Poisoned predetto come poisoned
-            fp = np.sum((predictions == True) & (labels == False))  # Poisoned predetto come clean
-            fn = np.sum((predictions == False) & (labels == True))  # Clean predetto come poisoned
+            # Calculate metrics
+            tp = np.sum((predictions == True) & (labels == True))   # Clean predicted as clean
+            tn = np.sum((predictions == False) & (labels == False)) # Poisoned predicted as poisoned
+            fp = np.sum((predictions == True) & (labels == False))  # Poisoned predicted as clean
+            fn = np.sum((predictions == False) & (labels == True))  # Clean predicted as poisoned
             
             if (tp + tn + fp + fn) > 0:
                 accuracy = (tp + tn) / (tp + tn + fp + fn)
@@ -605,12 +605,12 @@ class FL_SimilarityTester:
         return best_threshold, best_stats
     
     def create_visualizations(self):
-        """Crea visualizzazioni dettagliate dei risultati."""
+        """Create detailed visualizations of results."""
         if not self.similarity_evolution['cosine_original']:
             print("No data available for visualization")
             return
         
-        # Setup per multiple subplot
+        # Setup for multiple subplots
         fig = plt.figure(figsize=(20, 15))
         
         evolution_data = self.similarity_evolution['cosine_original']
@@ -732,14 +732,14 @@ class FL_SimilarityTester:
         print(f"\n📊 Visualization saved as 'cosine_similarity_analysis.png'")
     
     def create_detailed_report(self):
-        """Crea un report dettagliato in formato DataFrame."""
+        """Create a detailed report in DataFrame format."""
         if not self.similarity_evolution['cosine_original']:
             print("No data available for detailed report")
             return None
         
         evolution_data = self.similarity_evolution['cosine_original']
         
-        # Crea DataFrame per l'analisi temporale
+        # Create DataFrame for temporal analysis
         df_temporal = pd.DataFrame([
             {
                 'Epoch': d['epoch'] + 1,
@@ -762,20 +762,20 @@ class FL_SimilarityTester:
         print(f"\n📋 Temporal Evolution Summary:")
         print(df_temporal.round(6).to_string(index=False))
         
-        # Statistiche riassuntive
+        # Summary statistics
         print(f"\n📊 Summary Statistics:")
         summary_stats = df_temporal.describe().round(6)
         print(summary_stats)
         
-        # Analisi trend
+        # Trend analysis
         print(f"\n📈 Trend Analysis:")
         for column in ['Discrimination', 'Separability_Ratio', 'Threshold_Accuracy']:
             if len(df_temporal) > 1:
                 correlation = df_temporal['Epoch'].corr(df_temporal[column])
                 trend_slope = np.polyfit(df_temporal['Epoch'], df_temporal[column], 1)[0]
-                print(f"  {column:200}: Correlation with time = {correlation:+.4f}, Slope = {trend_slope:+.6f}")
+                print(f"  {column:20}: Correlation with time = {correlation:+.4f}, Slope = {trend_slope:+.6f}")
         
-        # Stabilità del threshold
+        # Threshold stability
         threshold_std = df_temporal['Optimal_Threshold'].std()
         threshold_range = df_temporal['Optimal_Threshold'].max() - df_temporal['Optimal_Threshold'].min()
         
@@ -784,7 +784,7 @@ class FL_SimilarityTester:
         print(f"  Threshold Range (Max-Min): {threshold_range:.6f}")
         print(f"  Threshold Coefficient of Variation: {threshold_std/df_temporal['Optimal_Threshold'].mean():.6f}")
         
-        # Efficacia di detection
+        # Detection effectiveness
         avg_accuracy = df_temporal['Threshold_Accuracy'].mean()
         min_accuracy = df_temporal['Threshold_Accuracy'].min()
         max_accuracy = df_temporal['Threshold_Accuracy'].max()
@@ -795,7 +795,7 @@ class FL_SimilarityTester:
         print(f"  Max Accuracy: {max_accuracy:.4f} ({max_accuracy*100:.2f}%)")
         print(f"  Accuracy Stability (std): {df_temporal['Threshold_Accuracy'].std():.4f}")
         
-        # Raccomandazioni finali
+        # Final recommendations
         print(f"\n🔍 FINAL RECOMMENDATIONS:")
         print("="*60)
         
@@ -824,11 +824,11 @@ class FL_SimilarityTester:
         else:
             print("❌ Threshold is UNSTABLE - consider alternative approaches")
         
-        # Salva il report
+        # Save report
         df_temporal.to_csv('cosine_similarity_report.csv', index=False)
         print(f"\n💾 Detailed report saved as 'cosine_similarity_report.csv'")
         
-        # Crea anche il PDF professionale
+        # Also create professional PDF
         print(f"\n📊 Creating professional PDF report...")
         pdf_file = self.create_pdf_temporal_analysis(df_temporal)
         if pdf_file:
@@ -839,12 +839,12 @@ class FL_SimilarityTester:
         return df_temporal
     
     def create_pdf_temporal_analysis(self, df_temporal=None):
-        """Crea un grafico PDF professionale dall'analisi temporale."""
+        """Create a professional PDF graph from temporal analysis."""
         try:
             from matplotlib.backends.backend_pdf import PdfPages
             import seaborn as sns
             
-            # Se non viene fornito il DataFrame, lo crea dai dati esistenti
+            # If DataFrame not provided, create it from existing data
             if df_temporal is None:
                 if not self.similarity_evolution['cosine_original']:
                     print("No temporal data available for PDF creation")
@@ -866,16 +866,16 @@ class FL_SimilarityTester:
                     for d in evolution_data
                 ])
             
-            # Setup stile professionale
+            # Setup professional style
             plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
             sns.set_palette("husl")
             
-            # Crea il file PDF
+            # Create PDF file
             pdf_filename = 'cosine_similarity_temporal_analysis.pdf'
             
             with PdfPages(pdf_filename) as pdf:
                 
-                # ===================== PAGINA 1: Overview Metrics =====================
+                # ===================== PAGE 1: Overview Metrics =====================
                 fig = plt.figure(figsize=(16, 12))
                 fig.suptitle('Cosine Similarity Temporal Analysis - Overview', fontsize=20, fontweight='bold', y=0.95)
                 
@@ -907,7 +907,7 @@ class FL_SimilarityTester:
                 plt.plot(epochs, accuracies * 100, 's-', linewidth=3, markersize=8,
                         color='#F18F01', label='Detection Accuracy')
                 
-                # Aggiungi bande di qualità
+                # Add quality bands
                 plt.axhspan(80, 100, alpha=0.2, color='green', label='Excellent (≥80%)')
                 plt.axhspan(70, 80, alpha=0.2, color='yellow', label='Good (70-80%)')
                 plt.axhspan(0, 70, alpha=0.2, color='red', label='Poor (<70%)')
@@ -926,7 +926,7 @@ class FL_SimilarityTester:
                 clean_stds = df_temporal['Clean_Std'].values
                 poisoned_stds = df_temporal['Poisoned_Std'].values
                 
-                # Plot con error bars
+                # Plot with error bars
                 plt.errorbar(epochs, clean_avgs, yerr=clean_stds, 
                            fmt='o-', linewidth=3, markersize=6, capsize=5,
                            color='#4CAF50', label='Clean-Clean Similarity')
@@ -947,7 +947,7 @@ class FL_SimilarityTester:
                 plt.plot(epochs, thresholds, '^-', linewidth=3, markersize=8,
                         color='#9C27B0', label='Optimal Threshold')
                 
-                # Aggiungi statistiche
+                # Add statistics
                 mean_threshold = np.mean(thresholds)
                 std_threshold = np.std(thresholds)
                 
@@ -966,7 +966,7 @@ class FL_SimilarityTester:
                 pdf.savefig(fig, bbox_inches='tight')
                 plt.close()
                 
-                # ===================== PAGINA 2: Advanced Analysis =====================
+                # ===================== PAGE 2: Advanced Analysis =====================
                 fig = plt.figure(figsize=(16, 12))
                 fig.suptitle('Advanced Metrics & Statistical Analysis', fontsize=20, fontweight='bold', y=0.95)
                 
@@ -977,7 +977,7 @@ class FL_SimilarityTester:
                 plt.plot(epochs, sep_ratios, 'D-', linewidth=3, markersize=8,
                         color='#E91E63', label='Separability Ratio')
                 
-                # Aggiungi trend
+                # Add trend
                 if len(epochs) > 1:
                     z = np.polyfit(epochs, sep_ratios, 1)
                     p = np.poly1d(z)
@@ -997,7 +997,7 @@ class FL_SimilarityTester:
                 
                 im = ax2.imshow(metrics_for_corr, cmap='RdBu_r', aspect='auto', vmin=-1, vmax=1)
                 
-                # Aggiungi testo delle correlazioni
+                # Add correlation text
                 for i in range(len(metrics_for_corr)):
                     for j in range(len(metrics_for_corr)):
                         text = ax2.text(j, i, f'{metrics_for_corr.iloc[i, j]:.2f}',
@@ -1016,28 +1016,28 @@ class FL_SimilarityTester:
                 # Plot 3: Distribution Evolution (Box plot style)
                 ax3 = plt.subplot(2, 1, 2)
                 
-                # Crea dati per box plot temporale  
+                # Create data for temporal box plot  
                 data_clean = []
                 data_poisoned = []
                 epoch_labels = []
                 
-                # Usa i dati dettagliati se disponibili
+                # Use detailed data if available
                 if hasattr(self, 'detailed_similarities') and self.detailed_similarities:
-                    for i, epoch_data in enumerate(self.detailed_similarities[::max(1, len(self.detailed_similarities)//8)]):  # Campiona per evitare troppi box
+                    for i, epoch_data in enumerate(self.detailed_similarities[::max(1, len(self.detailed_similarities)//8)]):  # Sample to avoid too many boxes
                         data_clean.extend([(i, sim) for sim in epoch_data['clean_clean_sims']])
                         data_poisoned.extend([(i, sim) for sim in epoch_data['clean_poisoned_sims']])
                         epoch_labels.append(f"E{epoch_data['epoch']+1}")
                 
                 if data_clean and data_poisoned:
-                    # Converti in formato per plot
+                    # Convert to format for plotting
                     clean_epochs, clean_vals = zip(*data_clean)
                     poisoned_epochs, poisoned_vals = zip(*data_poisoned) 
                     
-                    # Crea violin plot
+                    # Create violin plot
                     positions_clean = [i - 0.2 for i in range(len(epoch_labels))]
                     positions_poisoned = [i + 0.2 for i in range(len(epoch_labels))]
                     
-                    # Organizza dati per violin plot
+                    # Organize data for violin plot
                     clean_data_by_epoch = []
                     poisoned_data_by_epoch = []
                     
@@ -1053,7 +1053,7 @@ class FL_SimilarityTester:
                     violin2 = ax3.violinplot(poisoned_data_by_epoch, positions=positions_poisoned,
                                            widths=0.3, showmeans=True)
                     
-                    # Colora i violin plots
+                    # Color violin plots
                     for pc in violin1['bodies']:
                         pc.set_facecolor('#4CAF50')
                         pc.set_alpha(0.7)
@@ -1068,7 +1068,7 @@ class FL_SimilarityTester:
                     ax3.set_title('Similarity Distributions Evolution Over Time', fontsize=14, fontweight='bold')
                     ax3.grid(True, alpha=0.3)
                     
-                    # Legenda custom
+                    # Custom legend
                     from matplotlib.patches import Patch
                     legend_elements = [Patch(facecolor='#4CAF50', alpha=0.7, label='Clean-Clean'),
                                      Patch(facecolor='#F44336', alpha=0.7, label='Clean-Poisoned')]
@@ -1078,19 +1078,19 @@ class FL_SimilarityTester:
                 pdf.savefig(fig, bbox_inches='tight')
                 plt.close()
                 
-                # ===================== PAGINA 3: Summary Statistics =====================
+                # ===================== PAGE 3: Summary Statistics =====================
                 fig = plt.figure(figsize=(16, 12))
                 fig.suptitle('Summary Statistics & Recommendations', fontsize=20, fontweight='bold', y=0.95)
                 
-                # Calcola statistiche riassuntive
+                # Calculate summary statistics
                 summary_stats = df_temporal.describe()
                 
-                # Crea tabella delle statistiche
+                # Create statistics table
                 ax1 = plt.subplot(2, 1, 1)
                 ax1.axis('tight')
                 ax1.axis('off')
                 
-                # Prepara i dati della tabella
+                # Prepare table data
                 stats_to_show = ['mean', 'std', 'min', 'max']
                 cols_to_show = ['Discrimination', 'Threshold_Accuracy', 'Separability_Ratio', 'Optimal_Threshold']
                 
@@ -1112,17 +1112,17 @@ class FL_SimilarityTester:
                 table.set_fontsize(12)
                 table.scale(1.2, 2)
                 
-                # Stile della tabella
+                # Table styling
                 for i in range(len(headers)):
                     table[(0, i)].set_facecolor('#E3F2FD')
                     table[(0, i)].set_text_props(weight='bold')
                 
                 ax1.set_title('Summary Statistics Table', fontsize=16, fontweight='bold', pad=20)
                 
-                # Plot finale: Trend summary
+                # Final plot: Trend summary
                 ax2 = plt.subplot(2, 1, 2)
                 
-                # Calcola trend per ciascuna metrica
+                # Calculate trend for each metric
                 metrics = ['Discrimination', 'Threshold_Accuracy', 'Separability_Ratio', 'Optimal_Threshold']
                 trends = []
                 
@@ -1133,11 +1133,11 @@ class FL_SimilarityTester:
                     else:
                         trends.append(0)
                 
-                # Crea bar plot dei trend
+                # Create bar plot of trends
                 colors = ['#2E86AB' if t >= 0 else '#A23B72' for t in trends]
                 bars = ax2.bar(range(len(metrics)), trends, color=colors, alpha=0.7)
                 
-                # Aggiungi etichette
+                # Add labels
                 ax2.set_xticks(range(len(metrics)))
                 ax2.set_xticklabels(metrics, rotation=45, ha='right')
                 ax2.set_ylabel('Trend Slope (per epoch)', fontsize=12)
@@ -1145,7 +1145,7 @@ class FL_SimilarityTester:
                 ax2.grid(True, alpha=0.3, axis='y')
                 ax2.axhline(y=0, color='black', linestyle='-', alpha=0.3)
                 
-                # Aggiungi valori sulle barre
+                # Add values on bars
                 for i, (bar, trend) in enumerate(zip(bars, trends)):
                     height = bar.get_height()
                     ax2.text(bar.get_x() + bar.get_width()/2., height + (0.1 * max(abs(min(trends)), abs(max(trends))) if height >= 0 else -0.1 * max(abs(min(trends)), abs(max(trends)))),
@@ -1155,7 +1155,7 @@ class FL_SimilarityTester:
                 pdf.savefig(fig, bbox_inches='tight')
                 plt.close()
                 
-                # Aggiungi metadati al PDF
+                # Add metadata to PDF
                 d = pdf.infodict()
                 d['Title'] = 'Cosine Similarity Temporal Analysis'
                 d['Author'] = 'DAGTrustFL Analysis System'
@@ -1181,9 +1181,9 @@ class FL_SimilarityTester:
             return None
 
 def main():
-    """Main function per eseguire il test esteso."""
+    """Main function to run the extended test."""
     
-    # Configura il logger per ridurre il noise
+    # Configure logger to reduce noise
     logger.remove()
     logger.add(sys.stderr, level="WARNING")
     
@@ -1196,12 +1196,12 @@ def main():
     print("  - Detailed statistical analysis")
     print("="*80)
     
-    # Crea e esegui il tester con configurazione potenziata
+    # Create and run tester with enhanced configuration
     tester = FL_SimilarityTester(
-        num_workers=18,      # Più workers per test robusto
-        num_poisoned=6,      # Più attackers per test realistico
-        num_epochs=200,       # 20 epoche come richiesto
-        workers_per_round=12 # Più workers per round
+        num_workers=18,      # More workers for robust testing
+        num_poisoned=6,      # More attackers for realistic testing
+        num_epochs=200,       # 200 epochs as requested
+        workers_per_round=12 # More workers per round
     )
     
     try:
