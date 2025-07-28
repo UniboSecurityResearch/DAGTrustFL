@@ -108,8 +108,8 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     :type poisoned_workers: list(int)
     """
     # Memory check at start of round
-    logger.info(f"=== ROUND {epoch} START - Memory Check ===")
-    check_memory()
+    #logger.info(f"=== ROUND {epoch} START - Memory Check ===")
+    #check_memory()
     
     kwargs = args.get_round_worker_selection_strategy_kwargs()
     kwargs["current_epoch_number"] = epoch
@@ -126,8 +126,8 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
         clients[client_idx].train(epoch)
     
     # Memory check after training
-    logger.info(f"=== ROUND {epoch} AFTER TRAINING - Memory Check ===")
-    check_memory()
+    #logger.info(f"=== ROUND {epoch} AFTER TRAINING - Memory Check ===")
+    #check_memory()
     
     #Saving parameters of clients in a dict for the graph
     parameters_clients = {}
@@ -136,18 +136,11 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     args.get_logger().info("Averaging client parameters")
     parameters = [clients[client_idx].get_nn_parameters() for client_idx in random_workers]
     
-    try:
-        trust_vector, update_contributions = get_trust_vector(parameters_clients, epoch, logger=logger)
-    except Exception as e:
-        logger.error(f"Error in get_trust_vector for epoch {epoch}: {e}")
-        logger.error("This may be causing the segmentation fault")
-        # Memory check after error
-        check_memory()
-        raise e
+    trust_vector, update_contributions = get_trust_vector(parameters_clients, epoch, logger=logger)
     
     # Memory check after DAG operations
-    logger.info(f"=== ROUND {epoch} AFTER DAG OPERATIONS - Memory Check ===")
-    check_memory()
+    #logger.info(f"=== ROUND {epoch} AFTER DAG OPERATIONS - Memory Check ===")
+    #check_memory()
 
     # Extract trust values only for the selected workers in this round
     ordered_parameters = []
@@ -175,8 +168,8 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
         raise e
     
     # Memory check after milestone
-    logger.info(f"=== ROUND {epoch} AFTER MILESTONE - Memory Check ===")
-    check_memory()
+    #logger.info(f"=== ROUND {epoch} AFTER MILESTONE - Memory Check ===")
+    #check_memory()
     
     for client in clients:
         args.get_logger().info("Updating parameters on client #{}", str(client.get_client_index()))
@@ -235,27 +228,21 @@ def run_machine_learning(clients, args, poisoned_workers):
     initial_memory = check_memory()
     
     for epoch in range(1, args.get_num_epochs() + 1):
-        try:
-            results, workers_selected = train_subset_of_clients(epoch, args, clients, poisoned_workers)
+        results, workers_selected = train_subset_of_clients(epoch, args, clients, poisoned_workers)
 
-            epoch_test_set_results.append(results)
-            worker_selection.append(workers_selected)
-            save_results(convert_results_to_csv([results]), r_filez[0])
-            save_results([workers_selected], w_filez[0])
-            
-            # Log progress with memory info
-            if epoch % 5 == 0:  # Every 5 epochs
-                logger.info(f"=== PROGRESS UPDATE - Completed {epoch}/{args.get_num_epochs()} epochs ===")
-                current_memory = check_memory()
-                if initial_memory and current_memory:
-                    total_increase = current_memory['memory_mb'] - initial_memory['memory_mb']
-                    logger.info(f"Total memory increase since start: {total_increase:+.2f} MB")
+        epoch_test_set_results.append(results)
+        worker_selection.append(workers_selected)
+        save_results(convert_results_to_csv([results]), r_filez[0])
+        save_results([workers_selected], w_filez[0])
+        
+        # Log progress with memory info
+        if epoch % 5 == 0:  # Every 5 epochs
+            logger.info(f"=== PROGRESS UPDATE - Completed {epoch}/{args.get_num_epochs()} epochs ===")
+            current_memory = check_memory()
+            if initial_memory and current_memory:
+                total_increase = current_memory['memory_mb'] - initial_memory['memory_mb']
+                logger.info(f"Total memory increase since start: {total_increase:+.2f} MB")
                     
-        except Exception as e:
-            logger.error(f"Error in epoch {epoch}: {e}")
-            logger.error("Performing emergency memory check...")
-            check_memory()
-            raise e
 
     # Final memory summary
     logger.info("=== EXPERIMENT END - Final Memory Check ===")

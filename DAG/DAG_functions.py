@@ -47,7 +47,8 @@ pos = None
 csv_filename = None  # CSV filename to save data
 checkpoint_malicious_conf = 0 #To be summed to total_malicious_confirmed to get the total number of malicious nodes confirmed
 checkpoint_corrupted_conf = 0 #To be summed to total_corrupted_confirmed to get the total number of corrupted nodes confirmed
-
+mean_sim_good = 0.4
+mean_sim_bad = 0.2
 
 def init_csv_logging(filename="dag_trust_analysis.csv", logger=None):
     """Initialize the CSV file to save round data."""
@@ -82,7 +83,7 @@ def init_csv_logging(filename="dag_trust_analysis.csv", logger=None):
 
 def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round, num_corrupted_confirmed_this_round, logger=None):
     """Save current round data to CSV file."""
-    global csv_filename, dag, trust_vector, structural_consistencies, updates_contributions
+    global csv_filename, dag, trust_vector, structural_consistencies, updates_contributions, mean_sim_bad, mean_sim_good
     global total_good_removed, total_malicious_confirmed, total_corrupted_confirmed, peers, selector, checkpoint_corrupted_conf, checkpoint_malicious_conf
 
     if csv_filename is None:
@@ -120,11 +121,34 @@ def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round,
 
     mean_sim_good = np.mean(good_similarities) if good_similarities else None
     mean_sim_bad = np.mean(bad_similarities) if bad_similarities else None
-    if mean_sim_bad > 0.001 and epoch > 3:
-        selector.update_threshold(np.mean([mean_sim_good,mean_sim_bad]), logger=logger)
+    
+    # Find the range where majority of values fall instead of using mean
+    if len(good_similarities) > 0 and len(bad_similarities) > 0 and epoch > 2:
+        # Combine all similarity values
+        all_similarities = good_similarities + bad_similarities
+        all_similarities = [sim for sim in all_similarities if not np.isnan(sim)]  # Remove NaN values
+        
+        if len(all_similarities) > 0:
+            # Calculate the range containing the majority of values (e.g., 25th to 75th percentile)
+            q25 = np.percentile(all_similarities, 25)
+            q75 = np.percentile(all_similarities, 75)
+            # Use the range width as the outlier detection threshold
+            # This represents the spread where most values fall
+            majority_range = q75 - q25
+            
+            # Alternative: use a percentile-based threshold (e.g., 10th percentile as lower bound)
+            # majority_threshold = np.percentile(all_similarities, 10)
+            
+            selector.update_outlier_detection(majority_range, logger=logger)
+            
+            if logger:
+                logger.info(f"Similarity range (Q25-Q75): {q25:.4f} - {q75:.4f}, Range width: {majority_range:.4f}")
+        else:
+            if logger:
+                logger.warning("No valid similarity values found for threshold update")
     
     if logger:
-        logger.info(f"Updated similarity threshold to: {selector.get_threshold():.4f}")
+        logger.info(f"Updated outlier range to: {selector.get_threshold():.4f}")
 
     # Prepare base round data
     row_data = [
@@ -166,7 +190,7 @@ def init_DAG(initial_params, logger):
     
     # Initialize DAG and tip selector
     dag = DAG.DAG()
-    selector = TipSelectionAlgorithm.TrustInformedTipSelector(
+    selector = TipSelectionAlgorithm.TrustInformedTipSelector_NoThreshold(
         similarity_method='cosine',
     )
     # Create X peers
@@ -249,16 +273,11 @@ def get_trust_vector(parameters_clients, epoch, logger):
             node.malicious = is_malicious
             node.corrupted = is_corrupted
             
-            try:
-                node_id = peer.add_node(node)
-                added_node_ids.append(node_id)
-                pos = nx.spring_layout(dag.graph, seed=42, pos=pos, fixed=list(pos.keys()))
-                dag_utils.draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
-                step += 1
-            except Exception as e:
-                if logger:
-                    logger.error(f"Error adding node for peer {peer.id}: {e}")
-                continue
+            node_id = peer.add_node(node)
+            added_node_ids.append(node_id)
+            pos = nx.spring_layout(dag.graph, seed=42, pos=pos, fixed=list(pos.keys()))
+            dag_utils.draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
+            step += 1
 
     if logger:
         logger.info(f"\n\nEND OF ROUND {epoch+1}\nTotal nodes: {len(dag.nodes)} - Total tips: {len(dag.tips)}")
@@ -305,7 +324,7 @@ def get_trust_vector(parameters_clients, epoch, logger):
         # If this peer has a node in the longest path and last FL round, check its past cone similarity
         if peer_node_in_path is not None:
             try:
-                nodes_outside = selector.check_past_cone_similarity([peer_node_in_path], dag, logger=logger)
+                nodes_outside = selector.check_past_cone_similarity([peer_node_in_path], mean_sim_good, dag, logger=logger)
                 if len(nodes_outside) > 0:
                     structural_consistency = 0  # Corrupted behavior detected in this peer's node past cone
                     if logger:
@@ -328,7 +347,7 @@ def get_trust_vector(parameters_clients, epoch, logger):
                         updates_contribution = 0
                         # Check this peer's node even if not in longest path
                         try:
-                            nodes_outside = selector.check_past_cone_similarity([node_id], dag, logger=logger)
+                            nodes_outside = selector.check_past_cone_similarity([node_id], mean_sim_good, dag, logger=logger)
                             if len(nodes_outside) > 0:
                                 structural_consistency = 0  # Corrupted behavior detected
                                 if logger:
@@ -366,11 +385,7 @@ def get_trust_vector(parameters_clients, epoch, logger):
         logger.info(f"Trust vector: {trust_vector}")
     
     # Save round data to CSV
-    try:
-        save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round, num_corrupted_confirmed_this_round, logger=logger)
-    except Exception as e:
-        if logger:
-            logger.error(f"Error saving round data: {e}")
+    save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round, num_corrupted_confirmed_this_round, logger=logger)
     
     # Remove nodes outside of the heaviest subgraph - do this safely
     nodes_removed = 0
@@ -514,7 +529,7 @@ def compute_longest_path(dag, selector, unconfirmed_tips, last_node_prev_round, 
                 
             # Check past cone similarity
             try:
-                nodes_to_remove = selector.check_past_cone_similarity([tip], dag)
+                nodes_to_remove = selector.check_past_cone_similarity([tip], mean_sim_good, dag)
                 if logger:
                     logger.info(f"Tip {tip} past cone similarity check: {nodes_to_remove}")
                 if len(nodes_to_remove) == 0:
