@@ -725,10 +725,10 @@ def copy_parameter_structure(template_params):
 
 
 # Update the main execution section
-if __name__ == "__main__":
+#if __name__ == "__main__":
     #test_euclidean_distance()
     #analyze_euclidean_distance_properties()
     #test_normalized_distance_range()
-    test_last_layer_extraction()
+    #test_last_layer_extraction()
     #test_cosine_similarity_defense()
 

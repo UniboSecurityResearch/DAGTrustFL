@@ -317,13 +317,16 @@ class DAGAnalyzer:
             
             # Mean similarities good vs bad
             if 'Mean_Similarity_Good' in self.df.columns and 'Mean_Similarity_Bad' in self.df.columns:
-                # Remove None/NaN values
-                good_sim = self.df['Mean_Similarity_Good'].dropna()
-                bad_sim = self.df['Mean_Similarity_Bad'].dropna()
-                good_rounds = rounds[self.df['Mean_Similarity_Good'].notna()]
-                bad_rounds = rounds[self.df['Mean_Similarity_Bad'].notna()]
+                # Remove None/NaN values and filter out zero values for malicious similarities
+                good_sim_mask = self.df['Mean_Similarity_Good'].notna()
+                bad_sim_mask = self.df['Mean_Similarity_Bad'].notna() & (self.df['Mean_Similarity_Bad'] != 0.0)
                 
-                print(f"     📊 Good similarities: {len(good_sim)} values, Bad similarities: {len(bad_sim)} values")
+                good_sim = self.df.loc[good_sim_mask, 'Mean_Similarity_Good']
+                bad_sim = self.df.loc[bad_sim_mask, 'Mean_Similarity_Bad']
+                good_rounds = rounds[good_sim_mask]
+                bad_rounds = rounds[bad_sim_mask]
+                
+                print(f"     📊 Good similarities: {len(good_sim)} values, Bad similarities: {len(bad_sim)} values (filtered zeros)")
                 
                 if len(good_sim) > 0:
                     ax2.plot(good_rounds, good_sim, 'green', linewidth=3, marker='o', label='Good Nodes', alpha=0.8)
@@ -352,7 +355,9 @@ class DAGAnalyzer:
             # Final similarity distribution
             if 'Mean_Similarity_Good' in self.df.columns and 'Mean_Similarity_Bad' in self.df.columns:
                 final_sim_good = self.df['Mean_Similarity_Good'].dropna()
+                # Filter out zero values for bad similarities
                 final_sim_bad = self.df['Mean_Similarity_Bad'].dropna()
+                final_sim_bad = final_sim_bad[final_sim_bad != 0.0]
                 
                 if len(final_sim_good) > 0 and len(final_sim_bad) > 0:
                     data_sim = [final_sim_good.values, final_sim_bad.values]
@@ -366,10 +371,12 @@ class DAGAnalyzer:
                 ax3.set_title('📈 Similarity Distribution')
                 ax3.grid(True, alpha=0.3)
             
-            # Gap analysis - difference between good and bad similarities
+            # Gap analysis - difference between good and bad similarities, filtering out zero bad values
             if 'Mean_Similarity_Good' in self.df.columns and 'Mean_Similarity_Bad' in self.df.columns:
-                # Calculate difference where both values exist
-                valid_mask = self.df['Mean_Similarity_Good'].notna() & self.df['Mean_Similarity_Bad'].notna()
+                # Calculate difference where both values exist and bad similarity is not zero
+                valid_mask = (self.df['Mean_Similarity_Good'].notna() & 
+                             self.df['Mean_Similarity_Bad'].notna() & 
+                             (self.df['Mean_Similarity_Bad'] != 0.0))
                 if valid_mask.sum() > 0:
                     gap = self.df.loc[valid_mask, 'Mean_Similarity_Good'] - self.df.loc[valid_mask, 'Mean_Similarity_Bad']
                     gap_rounds = rounds[valid_mask]

@@ -517,7 +517,7 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
 class TrustInformedTipSelector_NoThreshold(TipSelectionAlgorithm):
     #TODO:
     # make the similarity threshold variable based on the epoch
-    def __init__(self, max_depth=3, outlier_detection=0.10, cw_penalty_factor=0.05, similarity_method='cosine'):
+    def __init__(self, max_depth=3, outlier_detection=0.10, cw_penalty_factor=0.08, similarity_method='cosine'):
         self.max_depth = max_depth # depth of the past cone to inspect
         self.outlier_detection = outlier_detection  # Optimized from extended FL testing
         self.cw_penalty_factor = cw_penalty_factor  # Factor to penalize high CW nodes
@@ -549,7 +549,7 @@ class TrustInformedTipSelector_NoThreshold(TipSelectionAlgorithm):
     def cs_evaluate_similarity(self, node_id, dag: DAG, new_parameters, logger=None):
         current_parameters = dag.nodes[node_id].data
         if dag.nodes[node_id].peer.name == "CentralNode":
-            return 1.0 - (self.cw_penalty_factor * dag.nodes[node_id].cw)
+            return 1.0 - (self.cw_penalty_factor * 3 * dag.nodes[node_id].cw)
         else:
             sim = parameter_utils.cos_sim_simple(current_parameters, new_parameters)
             return (sim - (self.cw_penalty_factor * dag.nodes[node_id].cw))
@@ -616,11 +616,10 @@ class TrustInformedTipSelector_NoThreshold(TipSelectionAlgorithm):
                     current_parameters = dag.nodes[current].data
                     # Get parent nodes of current node
                     parent_nodes = list(dag.graph.successors(current))
-                    if logger:
+                    if len(parent_nodes) == 0:
+                        logger.error(f"Node {current} has no parents, skipping similarity check")
+                    if logger and debug == 1:
                         logger.debug(f"NAME: {dag.nodes[current].peer.name}")
-                    else:
-                        if logger:
-                            logger.debug(f"NAME: {dag.nodes[current].peer.name}")
                     if dag.nodes[current].peer.name != "CentralNode":
                         # Compare current node's parameters with each parent's parameters
                         for parent in parent_nodes:
@@ -630,13 +629,21 @@ class TrustInformedTipSelector_NoThreshold(TipSelectionAlgorithm):
                             else:
                                 parent_parameters = dag.nodes[parent].data
                                 sim = parameter_utils.cos_sim_simple(current_parameters,parent_parameters)
+                                
+                                # Check if current node is malicious or corrupted and log detailed info
+                                current_node = dag.nodes[current]
+                                if current_node.malicious:
+                                    if logger:
+                                        logger.warning(f"MALICIOUS NODE {current}: similarity with parent {parent} = {sim:.4f}, sim_comp = {sim_comp:.4f}, difference = {abs(sim - sim_comp):.4f}, outlier_threshold = {self.outlier_detection:.4f}")
+                                elif current_node.corrupted:
+                                    if logger:
+                                        logger.warning(f"CORRUPTED NODE {current}: similarity with parent {parent} = {sim:.4f}, sim_comp = {sim_comp:.4f}, difference = {abs(sim - sim_comp):.4f}, outlier_threshold = {self.outlier_detection:.4f}")
+                                
+                                if logger and debug == 1:  
+                                    logger.debug(f"Comparing node {current} with parent {parent}: similarity = {sim:.4f}, sim_comp = {sim_comp:.4f}, diff with sim_comp = {abs(sim - sim_comp):.4f} and outlier detection threshold = {self.outlier_detection:.4f}")
                                 if not np.isnan(sim) and abs(sim - sim_comp) > self.outlier_detection:
-                                    if debug == 1:
-                                        if logger:
-                                            logger.debug(f"Node {node_id} excluded due to similarity difference ({abs(sim - sim_comp):.4f}) between node {current} and its parent {parent} exceeding threshold")
-                                        else:
-                                            if logger:
-                                                logger.debug(f"Node {node_id} excluded due to similarity difference ({abs(sim - sim_comp):.4f}) between node {current} and its parent {parent} exceeding threshold")
+                                    if debug == 1 and logger:
+                                        logger.debug(f"Node {node_id} excluded due to similarity difference ({abs(sim - sim_comp):.4f}) between node {current} and its parent {parent} exceeding threshold")
                                     should_remove_node = True
                                     break
                 
@@ -666,8 +673,12 @@ class TrustInformedTipSelector_NoThreshold(TipSelectionAlgorithm):
                 scored.append((tip, score))
         
         if corrupted:
-            # If corrupted, the order is reversed to prioritize lower scores, i.e. malicious nodes
-            scored.sort(key=lambda x: x[1], reverse=False)
+            # If corrupted, prioritize malicious updates
+            for tip,score in scored:
+                if dag.nodes[tip].malicious:
+                    #Move to first in scored list
+                    scored.remove((tip,score))
+                    scored.insert(0, (tip,score))
             # Lower threshold for corrupted nodes
             # Step 3: select the worst unconfirmed nodes
             selected = [tip for tip, _ in scored if _ >= 0.0001][:2]
@@ -753,8 +764,12 @@ class TrustInformedTipSelector_NoThreshold(TipSelectionAlgorithm):
                 if score is not None:
                     confirmed_scores.append((node, score))
             if corrupted:
-                # If corrupted, we want to select the worst confirmed nodes
-                confirmed_scores.sort(key=lambda x: x[1], reverse=False)
+                # If corrupted, prioritize malicious updates
+                for tip,score in confirmed_scores:
+                    if dag.nodes[tip].malicious:
+                        #Move to first in scored list
+                        confirmed_scores.remove((tip,score))
+                        confirmed_scores.insert(0, (tip,score))
                 selected += [node for node, _ in confirmed_scores[:2 - len(selected)]]
             else:
                 # If not corrupted, we want to select the best confirmed nodes and check their past cone
