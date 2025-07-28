@@ -8,3 +8,6 @@ loguru
 PyQt5
 pandas
 scikit-learn
+psutil
+pandas
+
