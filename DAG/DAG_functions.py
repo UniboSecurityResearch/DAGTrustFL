@@ -17,9 +17,9 @@ import os
 #matplotlib.use('Qt5Agg')
 # Simulation of a DAG with X peers, each one makes Y nodes
 X= 10  # Number of peers
-R= 200  # Number of FL rounds
+R= 100  # Number of FL rounds
 malicious_percentage = 0.1  # Percentage of malicious peers
-corrupted_percentage = 0.3  # Percentage of corrupted peers
+corrupted_percentage = 0.0  # Percentage of corrupted peers
 
 trust_vector = [1] * X
 structural_consistencies = []

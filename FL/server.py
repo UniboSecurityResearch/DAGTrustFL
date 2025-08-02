@@ -312,7 +312,11 @@ def run_exp(replacement_method, client_selection_strategy, idx):
 
     poisoned_workers = malicious_indices
     #poisoned_workers = identify_random_elements(args.get_num_workers(), args.get_num_poisoned_workers())
-    logger.info("Poisoned workers: {}", str(poisoned_workers))
+    logger.info(f"Poisoned workers: {str(poisoned_workers)}")
+    if torch.cuda.is_available():
+        logger.info(f"CUDA is available, using GPU for training: {torch.cuda.get_device_name(0)}")
+    else:
+        logger.error("CUDA is not available, using CPU for training.")
     distributed_train_dataset = poison_data(logger, distributed_train_dataset, args.get_num_workers(), poisoned_workers, replacement_method)
 
     train_data_loaders = generate_data_loaders_from_distributed_dataset(distributed_train_dataset, args.get_batch_size())
