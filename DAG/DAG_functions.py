@@ -19,14 +19,14 @@ import os
 X= 10  # Number of peers
 R= 100  # Number of FL rounds
 malicious_percentage = 0.1  # Percentage of malicious peers
-corrupted_percentage = 0.0  # Percentage of corrupted peers
+corrupted_percentage = 0.4  # Percentage of corrupted peers
 
 trust_vector = [1] * X
 structural_consistencies = []
 updates_contributions = []
-upsilon_1 = 0.2  # Weight for structural consistency
-upsilon_2 = 0.8  # Weight for updates contributions
-lambda_ = 0.6  # Weight for influence of historical trust evaluations
+upsilon_1 = 0.4  # Weight for structural consistency
+upsilon_2 = 0.6  # Weight for updates contributions
+lambda_ = 0.5  # Weight for influence of historical trust evaluations
 dag = None
 selector = None
 peers = []
@@ -243,6 +243,7 @@ def init_DAG(initial_params, logger):
 def get_trust_vector(parameters_clients, epoch, logger):
     global dag, selector, peers, longest_ppath, step, added_node_ids, total_good_removed, total_malicious_confirmed, total_corrupted_confirmed, trust_vector, structural_consistencies, updates_contributions, last_node_prev_round, pos, checkpoint_malicious_conf, checkpoint_corrupted_conf
     
+    dag.current_epoch = epoch
     # Take the actual neural network parameters and put them in the DAG nodes
     for peer in peers:
         if peer.id in parameters_clients.keys():
@@ -379,7 +380,11 @@ def get_trust_vector(parameters_clients, epoch, logger):
         trust_value = upsilon_1 * structural_consistency + upsilon_2 * updates_contribution
         trust_value_t = (1-lambda_) * trust_value + lambda_ * trust_vector[i]  # Historical trust influence
         trust_vector[i] = trust_value_t
-    
+
+        #NO DETECTION
+        #structural_consistencies[i] = 1.0
+        #updates_contributions[i] = 1.0
+        #trust_vector[i] = 1.0
     if logger:
         logger.info(f"Structural Consistency vector: {structural_consistencies}")
         logger.info(f"Update Contributions vector: {updates_contributions}")

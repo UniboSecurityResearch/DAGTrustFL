@@ -517,7 +517,7 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
 class TrustInformedTipSelector_NoThreshold(TipSelectionAlgorithm):
     #TODO:
     # make the similarity threshold variable based on the epoch
-    def __init__(self, max_depth=3, outlier_detection=0.10, cw_penalty_factor=0.08, similarity_method='cosine'):
+    def __init__(self, max_depth=3, outlier_detection=0.10, cw_penalty_factor=0.02, similarity_method='cosine'):
         self.max_depth = max_depth # depth of the past cone to inspect
         self.outlier_detection = outlier_detection  # Optimized from extended FL testing
         self.cw_penalty_factor = cw_penalty_factor  # Factor to penalize high CW nodes
@@ -549,10 +549,13 @@ class TrustInformedTipSelector_NoThreshold(TipSelectionAlgorithm):
     def cs_evaluate_similarity(self, node_id, dag: DAG, new_parameters, logger=None):
         current_parameters = dag.nodes[node_id].data
         if dag.nodes[node_id].peer.name == "CentralNode":
-            return 1.0 - (self.cw_penalty_factor * 3 * dag.nodes[node_id].cw)
+            return 0.8 - (self.cw_penalty_factor * dag.nodes[node_id].cw)
         else:
             sim = parameter_utils.cos_sim_simple(current_parameters, new_parameters)
-            return (sim - (self.cw_penalty_factor * dag.nodes[node_id].cw))
+            if dag.nodes[node_id].epoch < dag.current_epoch:
+                return (sim - (self.cw_penalty_factor * (dag.current_epoch - dag.nodes[node_id].epoch + 1) * dag.nodes[node_id].cw))
+            else:
+                return (sim - (self.cw_penalty_factor * dag.nodes[node_id].cw))
 
     def evaluate_similarity(self, node_id, dag: DAG, new_parameters, logger=None):
         weight=1
@@ -716,11 +719,6 @@ class TrustInformedTipSelector_NoThreshold(TipSelectionAlgorithm):
             
             # Step 3: select the best nodes (those that passed past cone check)
             selected = [tip for tip, _ in scored[:2]]
-            if logger:
-                logger.info(f"Selected after past cone check: {selected}")
-            else:
-                if logger:
-                    logger.info(f"Selected after past cone check: {selected}")
         # Step 5: if less than 2, add fallback considering also confirmed nodes
         if len(selected) < 2:
             if logger:
@@ -735,34 +733,29 @@ class TrustInformedTipSelector_NoThreshold(TipSelectionAlgorithm):
             # Filter confirmed nodes for those that are similar
             confirmed_scores = []
             for node in confirmed_nodes:
-                if logger:
-                    logger.debug(f"Checking confirmed node: {node}")
-                else:
-                    if logger:
-                        logger.info(f"Checking confirmed node: {node}")
-
-                # Quick compatibility check before calling evaluate_similarity
-                try:
-                    current_parameters = dag.nodes[node].data
-                    # Check if the data looks like neural network parameters
-                    if not isinstance(current_parameters, (dict, type(new_parameters))):
+                if dag.current_epoch - dag.nodes[node].epoch < 3:
+                    # Quick compatibility check before calling evaluate_similarity
+                    try:
+                        current_parameters = dag.nodes[node].data
+                        # Check if the data looks like neural network parameters
+                        if not isinstance(current_parameters, (dict, type(new_parameters))):
+                            if logger:
+                                logger.warning(f"Skipping node {node} - incompatible data type: {type(current_parameters)}")
+                            else:
+                                if logger:
+                                    logger.warning(f"  Skipping node {node} - incompatible data type: {type(current_parameters)}")
+                            continue
+                    except Exception as e:
                         if logger:
-                            logger.warning(f"Skipping node {node} - incompatible data type: {type(current_parameters)}")
+                            logger.error(f"Error accessing data for node {node}: {e}")
                         else:
                             if logger:
-                                logger.warning(f"  Skipping node {node} - incompatible data type: {type(current_parameters)}")
+                                logger.error(f"  Error accessing data for node {node}: {e}")
                         continue
-                except Exception as e:
-                    if logger:
-                        logger.error(f"Error accessing data for node {node}: {e}")
-                    else:
-                        if logger:
-                            logger.error(f"  Error accessing data for node {node}: {e}")
-                    continue
-                
-                score = self.cs_evaluate_similarity(node, dag, new_parameters, logger)
-                if score is not None:
-                    confirmed_scores.append((node, score))
+                    
+                    score = self.cs_evaluate_similarity(node, dag, new_parameters, logger)
+                    if score is not None:
+                        confirmed_scores.append((node, score))
             if corrupted:
                 # If corrupted, prioritize malicious updates
                 for tip,score in confirmed_scores:
@@ -775,11 +768,8 @@ class TrustInformedTipSelector_NoThreshold(TipSelectionAlgorithm):
                 # If not corrupted, we want to select the best confirmed nodes and check their past cone
                 new_selected = []    
                 confirmed_scores.sort(key=lambda x: x[1], reverse=True)
-                if logger:
-                    logger.info(f"Confirmed nodes: {confirmed_scores}")
-                else:
-                    if logger:
-                        logger.info(f"Confirmed nodes: {confirmed_scores}")
+                #if logger:
+                #    logger.info(f"Confirmed nodes: {confirmed_scores}")
                 repeat = True
                 while len(scored)> 2 and repeat:
                     # Step 3: select the best unconfirmed nodes

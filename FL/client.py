@@ -165,7 +165,7 @@ class Client:
                 self.args.get_logger().debug(f"Client {self.client_idx} memory after training: {memory_after:.2f} MB (+{memory_increase:.2f} MB)")
                 
                 # Trigger cleanup if client is using too much memory
-                if memory_after > 500:  # 500MB threshold for individual client
+                if memory_after > 2000:  # 2000MB threshold for individual client
                     self.args.get_logger().warning(f"Client {self.client_idx} high memory usage: {memory_after:.2f} MB")
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()

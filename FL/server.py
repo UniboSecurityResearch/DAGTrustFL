@@ -47,22 +47,22 @@ def check_memory():
         system_memory = psutil.virtual_memory()
         available_mb = system_memory.available / 1024 / 1024
         
-        logger.info(f"Memory usage: {memory_mb:.2f} MB ({memory_percent:.1f}% of system)")
-        logger.info(f"Available system memory: {available_mb:.2f} MB")
+        #logger.info(f"Memory usage: {memory_mb:.2f} MB ({memory_percent:.1f}% of system)")
+        #logger.info(f"Available system memory: {available_mb:.2f} MB")
         
         # Check GPU memory if CUDA is available
         if torch.cuda.is_available():
             try:
                 gpu_memory_allocated = torch.cuda.memory_allocated() / 1024 / 1024
                 gpu_memory_reserved = torch.cuda.memory_reserved() / 1024 / 1024
-                logger.info(f"GPU memory - Allocated: {gpu_memory_allocated:.2f} MB, Reserved: {gpu_memory_reserved:.2f} MB")
+                #logger.info(f"GPU memory - Allocated: {gpu_memory_allocated:.2f} MB, Reserved: {gpu_memory_reserved:.2f} MB")
             except Exception as e:
                 logger.warning(f"Could not get GPU memory info: {e}")
         
         # Trigger garbage collection if memory usage is high
-        if memory_mb > 1000:  # Alert if over 1GB
-            logger.warning(f"High memory usage detected: {memory_mb:.2f} MB")
-            logger.info("Triggering garbage collection...")
+        if memory_mb > 4000:  # Alert if over 4GB
+            #logger.warning(f"High memory usage detected: {memory_mb:.2f} MB")
+            #logger.info("Triggering garbage collection...")
             
             # Clear PyTorch cache
             if torch.cuda.is_available():
@@ -70,15 +70,15 @@ def check_memory():
             
             # Force garbage collection
             collected = gc.collect()
-            logger.info(f"Garbage collection completed, collected {collected} objects")
+            #logger.info(f"Garbage collection completed, collected {collected} objects")
             
             # Check memory again after cleanup
             process = psutil.Process(os.getpid())
             new_memory_mb = process.memory_info().rss / 1024 / 1024
-            logger.info(f"Memory after cleanup: {new_memory_mb:.2f} MB (freed {memory_mb - new_memory_mb:.2f} MB)")
+            #logger.info(f"Memory after cleanup: {new_memory_mb:.2f} MB (freed {memory_mb - new_memory_mb:.2f} MB)")
         
         # Critical memory warning
-        if memory_mb > 2000:  # Critical if over 2GB
+        if memory_mb > 6000:  # Critical if over 6GB
             logger.warning(f"CRITICAL: Very high memory usage: {memory_mb:.2f} MB")
             logger.warning("Consider reducing batch size, model size, or number of workers")
         

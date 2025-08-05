@@ -5,6 +5,7 @@ class DAG:
         self.graph = nx.DiGraph()
         self.tips = set()
         self.nodes = {}
+        self.current_epoch = 0
 
     def add_node(self, node, parents):
         self.graph.add_node(node.id, data=node.data)
