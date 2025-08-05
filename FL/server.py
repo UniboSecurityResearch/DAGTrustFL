@@ -47,22 +47,22 @@ def check_memory():
         system_memory = psutil.virtual_memory()
         available_mb = system_memory.available / 1024 / 1024
         
-        logger.info(f"Memory usage: {memory_mb:.2f} MB ({memory_percent:.1f}% of system)")
-        logger.info(f"Available system memory: {available_mb:.2f} MB")
+        #logger.info(f"Memory usage: {memory_mb:.2f} MB ({memory_percent:.1f}% of system)")
+        #logger.info(f"Available system memory: {available_mb:.2f} MB")
         
         # Check GPU memory if CUDA is available
         if torch.cuda.is_available():
             try:
                 gpu_memory_allocated = torch.cuda.memory_allocated() / 1024 / 1024
                 gpu_memory_reserved = torch.cuda.memory_reserved() / 1024 / 1024
-                logger.info(f"GPU memory - Allocated: {gpu_memory_allocated:.2f} MB, Reserved: {gpu_memory_reserved:.2f} MB")
+                #logger.info(f"GPU memory - Allocated: {gpu_memory_allocated:.2f} MB, Reserved: {gpu_memory_reserved:.2f} MB")
             except Exception as e:
                 logger.warning(f"Could not get GPU memory info: {e}")
         
         # Trigger garbage collection if memory usage is high
-        if memory_mb > 1000:  # Alert if over 1GB
-            logger.warning(f"High memory usage detected: {memory_mb:.2f} MB")
-            logger.info("Triggering garbage collection...")
+        if memory_mb > 4000:  # Alert if over 4GB
+            #logger.warning(f"High memory usage detected: {memory_mb:.2f} MB")
+            #logger.info("Triggering garbage collection...")
             
             # Clear PyTorch cache
             if torch.cuda.is_available():
@@ -70,15 +70,15 @@ def check_memory():
             
             # Force garbage collection
             collected = gc.collect()
-            logger.info(f"Garbage collection completed, collected {collected} objects")
+            #logger.info(f"Garbage collection completed, collected {collected} objects")
             
             # Check memory again after cleanup
             process = psutil.Process(os.getpid())
             new_memory_mb = process.memory_info().rss / 1024 / 1024
-            logger.info(f"Memory after cleanup: {new_memory_mb:.2f} MB (freed {memory_mb - new_memory_mb:.2f} MB)")
+            #logger.info(f"Memory after cleanup: {new_memory_mb:.2f} MB (freed {memory_mb - new_memory_mb:.2f} MB)")
         
         # Critical memory warning
-        if memory_mb > 2000:  # Critical if over 2GB
+        if memory_mb > 6000:  # Critical if over 6GB
             logger.warning(f"CRITICAL: Very high memory usage: {memory_mb:.2f} MB")
             logger.warning("Consider reducing batch size, model size, or number of workers")
         
@@ -108,8 +108,8 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     :type poisoned_workers: list(int)
     """
     # Memory check at start of round
-    logger.info(f"=== ROUND {epoch} START - Memory Check ===")
-    check_memory()
+    #logger.info(f"=== ROUND {epoch} START - Memory Check ===")
+    #check_memory()
     
     kwargs = args.get_round_worker_selection_strategy_kwargs()
     kwargs["current_epoch_number"] = epoch
@@ -126,8 +126,8 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
         clients[client_idx].train(epoch)
     
     # Memory check after training
-    logger.info(f"=== ROUND {epoch} AFTER TRAINING - Memory Check ===")
-    check_memory()
+    #logger.info(f"=== ROUND {epoch} AFTER TRAINING - Memory Check ===")
+    #check_memory()
     
     #Saving parameters of clients in a dict for the graph
     parameters_clients = {}
@@ -136,18 +136,11 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     args.get_logger().info("Averaging client parameters")
     parameters = [clients[client_idx].get_nn_parameters() for client_idx in random_workers]
     
-    try:
-        trust_vector, update_contributions = get_trust_vector(parameters_clients, epoch, logger=logger)
-    except Exception as e:
-        logger.error(f"Error in get_trust_vector for epoch {epoch}: {e}")
-        logger.error("This may be causing the segmentation fault")
-        # Memory check after error
-        check_memory()
-        raise e
+    trust_vector, update_contributions = get_trust_vector(parameters_clients, epoch, logger=logger)
     
     # Memory check after DAG operations
-    logger.info(f"=== ROUND {epoch} AFTER DAG OPERATIONS - Memory Check ===")
-    check_memory()
+    #logger.info(f"=== ROUND {epoch} AFTER DAG OPERATIONS - Memory Check ===")
+    #check_memory()
 
     # Extract trust values only for the selected workers in this round
     ordered_parameters = []
@@ -175,8 +168,8 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
         raise e
     
     # Memory check after milestone
-    logger.info(f"=== ROUND {epoch} AFTER MILESTONE - Memory Check ===")
-    check_memory()
+    #logger.info(f"=== ROUND {epoch} AFTER MILESTONE - Memory Check ===")
+    #check_memory()
     
     for client in clients:
         args.get_logger().info("Updating parameters on client #{}", str(client.get_client_index()))
@@ -235,27 +228,21 @@ def run_machine_learning(clients, args, poisoned_workers):
     initial_memory = check_memory()
     
     for epoch in range(1, args.get_num_epochs() + 1):
-        try:
-            results, workers_selected = train_subset_of_clients(epoch, args, clients, poisoned_workers)
+        results, workers_selected = train_subset_of_clients(epoch, args, clients, poisoned_workers)
 
-            epoch_test_set_results.append(results)
-            worker_selection.append(workers_selected)
-            save_results(convert_results_to_csv([results]), r_filez[0])
-            save_results([workers_selected], w_filez[0])
-            
-            # Log progress with memory info
-            if epoch % 5 == 0:  # Every 5 epochs
-                logger.info(f"=== PROGRESS UPDATE - Completed {epoch}/{args.get_num_epochs()} epochs ===")
-                current_memory = check_memory()
-                if initial_memory and current_memory:
-                    total_increase = current_memory['memory_mb'] - initial_memory['memory_mb']
-                    logger.info(f"Total memory increase since start: {total_increase:+.2f} MB")
+        epoch_test_set_results.append(results)
+        worker_selection.append(workers_selected)
+        save_results(convert_results_to_csv([results]), r_filez[0])
+        save_results([workers_selected], w_filez[0])
+        
+        # Log progress with memory info
+        if epoch % 5 == 0:  # Every 5 epochs
+            logger.info(f"=== PROGRESS UPDATE - Completed {epoch}/{args.get_num_epochs()} epochs ===")
+            current_memory = check_memory()
+            if initial_memory and current_memory:
+                total_increase = current_memory['memory_mb'] - initial_memory['memory_mb']
+                logger.info(f"Total memory increase since start: {total_increase:+.2f} MB")
                     
-        except Exception as e:
-            logger.error(f"Error in epoch {epoch}: {e}")
-            logger.error("Performing emergency memory check...")
-            check_memory()
-            raise e
 
     # Final memory summary
     logger.info("=== EXPERIMENT END - Final Memory Check ===")
@@ -325,7 +312,11 @@ def run_exp(replacement_method, client_selection_strategy, idx):
 
     poisoned_workers = malicious_indices
     #poisoned_workers = identify_random_elements(args.get_num_workers(), args.get_num_poisoned_workers())
-    logger.info("Poisoned workers: {}", str(poisoned_workers))
+    logger.info(f"Poisoned workers: {str(poisoned_workers)}")
+    if torch.cuda.is_available():
+        logger.info(f"CUDA is available, using GPU for training: {torch.cuda.get_device_name(0)}")
+    else:
+        logger.error("CUDA is not available, using CPU for training.")
     distributed_train_dataset = poison_data(logger, distributed_train_dataset, args.get_num_workers(), poisoned_workers, replacement_method)
 
     train_data_loaders = generate_data_loaders_from_distributed_dataset(distributed_train_dataset, args.get_batch_size())
