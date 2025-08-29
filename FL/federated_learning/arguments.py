@@ -42,7 +42,7 @@ class Arguments:
         self.num_workers = 50
         self.num_poisoned_workers = 10
 
-        #GIACOMO: CAMBIARE IN CIFAR10
+        
         #self.net = Cifar10CNN
         self.net = FashionMNISTCNN
 

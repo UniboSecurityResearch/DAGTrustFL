@@ -15,18 +15,18 @@ import csv
 import os
 
 #matplotlib.use('Qt5Agg')
-# Simulation of a DAG with X peers, each one makes Y nodes
-X= 10  # Number of peers
+# Simulation of a DAG with K peers, each one makes Y nodes
+K= 10  # Number of peers
 R= 100  # Number of FL rounds
-malicious_percentage = 0.1  # Percentage of malicious peers
-corrupted_percentage = 0.4  # Percentage of corrupted peers
-
-trust_vector = [1] * X
-structural_consistencies = []
-updates_contributions = []
+malicious_percentage = 0.2  # Percentage of malicious peers - m%
+corrupted_percentage = 0.1  # Percentage of corrupted peers
 upsilon_1 = 0.4  # Weight for structural consistency
 upsilon_2 = 0.6  # Weight for updates contributions
 lambda_ = 0.5  # Weight for influence of historical trust evaluations
+
+trust_vector = [1] * K
+structural_consistencies = []
+updates_contributions = []
 dag = None
 selector = None
 peers = []
@@ -47,8 +47,8 @@ pos = None
 csv_filename = None  # CSV filename to save data
 checkpoint_malicious_conf = 0 #To be summed to total_malicious_confirmed to get the total number of malicious nodes confirmed
 checkpoint_corrupted_conf = 0 #To be summed to total_corrupted_confirmed to get the total number of corrupted nodes confirmed
-mean_sim_good = 0.4
-mean_sim_bad = 0.2
+mean_sim_good = 0.4 #starting values
+mean_sim_bad = 0.2 #starting values
 
 def init_csv_logging(filename="dag_trust_analysis.csv", logger=None):
     """Initialize the CSV file to save round data."""
@@ -65,7 +65,7 @@ def init_csv_logging(filename="dag_trust_analysis.csv", logger=None):
     ]
     
     # Add columns for trust vector and metrics for each peer
-    for i in range(X):
+    for i in range(K):
         headers.extend([
             f'Peer_{i}_Trust', f'Peer_{i}_Structural_Consistency', 
             f'Peer_{i}_Updates_Contribution', f'Peer_{i}_Is_Malicious', 
@@ -124,12 +124,12 @@ def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round,
     
     # Find the range where majority of values fall instead of using mean
     if len(good_similarities) > 0 and len(bad_similarities) > 0 and epoch > 2 and mean_sim_bad > 0:
-        # Combine all similarity values
+        # Combine all similarity values to make the experiment valid
         all_similarities = good_similarities + bad_similarities
         all_similarities = [sim for sim in all_similarities if not np.isnan(sim)]  # Remove NaN values
         
         if len(all_similarities) > 0:
-            # Calculate the range containing the majority of values (e.g., 25th to 75th percentile)
+            # Calculate the range containing the majority of values
             q25 = np.percentile(all_similarities, 25)
             q75 = np.percentile(all_similarities, 75)
             # Use the range width as the outlier detection threshold
@@ -164,7 +164,7 @@ def save_round_data(epoch, num_good_removed, num_malicious_confirmed_this_round,
     ]
     
     # Add data for each peer
-    for i in range(X):
+    for i in range(K):
         trust_val = trust_vector[i] if i < len(trust_vector) else 0.0
         struct_consistency = structural_consistencies[i] if i < len(structural_consistencies) else 1.0
         updates_contrib = updates_contributions[i] if i < len(updates_contributions) else 1.0
@@ -192,19 +192,19 @@ def init_DAG(initial_params, logger):
     selector = TipSelectionAlgorithm.TrustInformedTipSelector_NoThreshold(
         similarity_method='cosine',
     )
-    # Create X peers
-    peers = [Peer.Peer(dag, selector, name=f"Peer{i}", id=i) for i in range(X)]
-    central_node = Peer.Peer(dag, selector, name="CentralNode", id=X)  # Central node for aggregation
+    # Create K peers
+    peers = [Peer.Peer(dag, selector, name=f"Peer{i}", id=i) for i in range(K)]
+    central_node = Peer.Peer(dag, selector, name="CentralNode", id=K)  # Central node for aggregation
 
     # Randomly select malicious peers based on percentage
-    num_malicious = int(X * malicious_percentage)
-    malicious_indices = np.random.choice(X, num_malicious, replace=False)
+    num_malicious = int(K * malicious_percentage)
+    malicious_indices = np.random.choice(K, num_malicious, replace=False)
     for idx in malicious_indices:
         peers[idx].malicious = True
 
     # Randomly select corrupted peers based on percentage
-    num_corrupted = int(X * corrupted_percentage)
-    corrupted_indices = np.random.choice([i for i in range(X) if i not in malicious_indices], num_corrupted, replace=False)
+    num_corrupted = int(K * corrupted_percentage)
+    corrupted_indices = np.random.choice([i for i in range(K) if i not in malicious_indices], num_corrupted, replace=False)
     for idx in corrupted_indices:
         peers[idx].corrupted = True
 
@@ -237,7 +237,7 @@ def init_DAG(initial_params, logger):
     # Initialize CSV logging
     init_csv_logging(logger=logger)
     
-    return X,R,num_malicious,malicious_indices.tolist()
+    return K,R,num_malicious,malicious_indices.tolist()
 
 
 def get_trust_vector(parameters_clients, epoch, logger):

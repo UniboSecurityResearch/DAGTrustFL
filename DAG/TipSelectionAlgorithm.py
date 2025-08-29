@@ -517,10 +517,10 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
 class TrustInformedTipSelector_NoThreshold(TipSelectionAlgorithm):
     #TODO:
     # make the similarity threshold variable based on the epoch
-    def __init__(self, max_depth=3, outlier_detection=0.10, cw_penalty_factor=0.02, similarity_method='cosine'):
-        self.max_depth = max_depth # depth of the past cone to inspect
+    def __init__(self, chi=4, outlier_detection=0.10, varsigma=0.02, similarity_method='cosine'):
+        self.max_depth = chi # depth of the past cone to inspect
         self.outlier_detection = outlier_detection  # Optimized from extended FL testing
-        self.cw_penalty_factor = cw_penalty_factor  # Factor to penalize high CW nodes
+        self.cw_penalty_factor = varsigma  # Factor to penalize high CW nodes
         self.similarity_method = similarity_method  # Method for similarity calculation
 
     def update_outlier_detection(self, new_threshold, logger=None):

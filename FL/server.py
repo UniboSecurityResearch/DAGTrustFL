@@ -292,10 +292,10 @@ def run_exp(replacement_method, client_selection_strategy, idx):
     
     #GIACOMO: Initialize DAG with initial client parameters
     X, R, num_malicious, malicious_indices = init_DAG(initial_parameters, logger=logger)
-    NUMWORK=X-1
+    K=X-1
 
     # Now update the configuration with actual values from DAG
-    KWARGS["NUM_WORKERS_PER_ROUND"] = NUMWORK
+    KWARGS["NUM_WORKERS_PER_ROUND"] = K
 
     args = Arguments(logger)
     args.set_model_save_path(models_folders[0])
