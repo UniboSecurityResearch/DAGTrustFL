@@ -1,0 +1,129 @@
+% LaTeX Table: DAGTrustFL Model Accuracy vs Threat Levels
+% Generated from accuracy_data_compact.csv
+
+\begin{table}[htbp]
+\centering
+\caption{Model Accuracy Performance under Different Threat Scenarios}
+\label{tab:dagtrust_accuracy}
+\begin{tabular}{|c|c|c|c|}
+\hline
+\textbf{Malicious \%} & \textbf{Corrupted \%} & \textbf{Total Threat \%} & \textbf{Final Accuracy \%} \\
+\hline
+0 & 0 & 0 & 91.69 \\
+\hline
+10 & 0 & 10 & 91.23 \\
+\hline
+10 & 10 & 20 & 90.81 \\
+\hline
+20 & 0 & 20 & 90.99 \\
+\hline
+10 & 20 & 30 & 91.06 \\
+\hline
+20 & 10 & 30 & 90.98 \\
+\hline
+30 & 0 & 30 & 90.99 \\
+\hline
+10 & 30 & 40 & 90.84 \\
+\hline
+20 & 20 & 40 & 90.59 \\
+\hline
+30 & 10 & 40 & 89.87 \\
+\hline
+40 & 0 & 40 & 90.14 \\
+\hline
+\end{tabular}
+\end{table}
+
+% Alternative version with booktabs (more professional)
+\begin{table}[htbp]
+\centering
+\caption{Model Accuracy Performance under Different Threat Scenarios}
+\label{tab:dagtrust_accuracy_booktabs}
+\begin{tabular}{cccc}
+\toprule
+\textbf{Malicious \%} & \textbf{Corrupted \%} & \textbf{Total Threat \%} & \textbf{Final Accuracy \%} \\
+\midrule
+0 & 0 & 0 & 91.69 \\
+10 & 0 & 10 & 91.23 \\
+10 & 10 & 20 & 90.81 \\
+20 & 0 & 20 & 90.99 \\
+10 & 20 & 30 & 91.06 \\
+20 & 10 & 30 & 90.98 \\
+30 & 0 & 30 & 90.99 \\
+10 & 30 & 40 & 90.84 \\
+20 & 20 & 40 & 90.59 \\
+30 & 10 & 40 & 89.87 \\
+40 & 0 & 40 & 90.14 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% Grouped version by threat level for better readability
+\begin{table}[htbp]
+\centering
+\caption{DAGTrustFL Performance: Model Accuracy vs Threat Composition}
+\label{tab:dagtrust_grouped}
+\begin{tabular}{cccc}
+\toprule
+\textbf{Malicious \%} & \textbf{Corrupted \%} & \textbf{Total Threat \%} & \textbf{Final Accuracy \%} \\
+\midrule
+\multicolumn{4}{c}{\textit{Baseline Scenario}} \\
+0 & 0 & 0 & \textbf{91.69} \\
+\midrule
+\multicolumn{4}{c}{\textit{Low Threat (10-20\%)}} \\
+10 & 0 & 10 & 91.23 \\
+10 & 10 & 20 & 90.81 \\
+20 & 0 & 20 & 90.99 \\
+\midrule
+\multicolumn{4}{c}{\textit{Medium Threat (30\%)}} \\
+10 & 20 & 30 & 91.06 \\
+20 & 10 & 30 & 90.98 \\
+30 & 0 & 30 & 90.99 \\
+\midrule
+\multicolumn{4}{c}{\textit{High Threat (40\%)}} \\
+10 & 30 & 40 & 90.84 \\
+20 & 20 & 40 & 90.59 \\
+30 & 10 & 40 & 89.87 \\
+40 & 0 & 40 & 90.14 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% Compact version for space-constrained documents
+\begin{table}[htbp]
+\centering
+\caption{DAGTrustFL Accuracy vs Threat Level (Compact)}
+\label{tab:dagtrust_compact}
+\small
+\begin{tabular}{|c|c|c|c|}
+\hline
+\textbf{M\%} & \textbf{C\%} & \textbf{Total\%} & \textbf{Accuracy\%} \\
+\hline
+0 & 0 & 0 & 91.69 \\
+\hline
+10 & 0 & 10 & 91.23 \\
+\hline
+10 & 10 & 20 & 90.81 \\
+\hline
+20 & 0 & 20 & 90.99 \\
+\hline
+10 & 20 & 30 & 91.06 \\
+\hline
+20 & 10 & 30 & 90.98 \\
+\hline
+30 & 0 & 30 & 90.99 \\
+\hline
+10 & 30 & 40 & 90.84 \\
+\hline
+20 & 20 & 40 & 90.59 \\
+\hline
+30 & 10 & 40 & 89.87 \\
+\hline
+40 & 0 & 40 & 90.14 \\
+\hline
+\end{tabular}
+\end{table}
+
+% Required packages for booktabs version:
+% \usepackage{booktabs}
+% \usepackage{array}

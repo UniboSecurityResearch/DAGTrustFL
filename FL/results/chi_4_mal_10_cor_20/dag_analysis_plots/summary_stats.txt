@@ -1,0 +1,8 @@
+DAG Trust Analysis Report
+Generated: 2025-08-29 23:17:11
+CSV File: dag_trust_analysis.csv
+
+Total Rounds: 100
+Total Peers: 10
+Final Nodes: 48
+Final Tips: 4

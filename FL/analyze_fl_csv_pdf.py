@@ -493,9 +493,9 @@ def main():
     print("=" * 50)
     
     # Chiedi il file CSV
-    csv_file = input("📁 Nome del file CSV (default: 3000_results.csv): ").strip()
-    if not csv_file:
-        csv_file = "3000_results.csv"
+    #csv_file = input("📁 Nome del file CSV (default: 3000_results.csv): ").strip()
+    #if not csv_file:
+    csv_file = "3000_results.csv"
     
     # Crea l'analyzer
     analyzer = FLResultsAnalyzer(csv_file)

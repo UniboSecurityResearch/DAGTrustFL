@@ -517,7 +517,7 @@ class TrustInformedTipSelector(TipSelectionAlgorithm):
 class TrustInformedTipSelector_NoThreshold(TipSelectionAlgorithm):
     #TODO:
     # make the similarity threshold variable based on the epoch
-    def __init__(self, chi=4, outlier_detection=0.10, varsigma=0.02, similarity_method='cosine'):
+    def __init__(self, chi=2, outlier_detection=0.10, varsigma=0.02, similarity_method='cosine'):
         self.max_depth = chi # depth of the past cone to inspect
         self.outlier_detection = outlier_detection  # Optimized from extended FL testing
         self.cw_penalty_factor = varsigma  # Factor to penalize high CW nodes
@@ -606,56 +606,57 @@ class TrustInformedTipSelector_NoThreshold(TipSelectionAlgorithm):
         Returns a list of nodes that should be removed from selection.
         """
         nodes_to_remove = []
-        for node_id in selected_nodes:
-            visited = set()
-            queue = [(node_id, 0)]
-            should_remove_node = False
-            if dag.nodes[node_id].peer.name != "CentralNode":
-                while queue and not should_remove_node:
-                    current, depth = queue.pop(0)
-                    if current in visited or depth > self.max_depth:
-                        continue
-                    visited.add(current)
-                    current_parameters = dag.nodes[current].data
-                    # Get parent nodes of current node
-                    parent_nodes = list(dag.graph.successors(current))
-                    if len(parent_nodes) == 0:
-                        logger.error(f"Node {current} has no parents, skipping similarity check")
-                    if logger and debug == 1:
-                        logger.debug(f"NAME: {dag.nodes[current].peer.name}")
-                    if dag.nodes[current].peer.name != "CentralNode":
-                        # Compare current node's parameters with each parent's parameters
-                        for parent in parent_nodes:
-                            if(dag.nodes[parent].peer.name == "CentralNode"):
-                                # Skip the central node, as it is not a peer and does not have parameters
-                                sim=1.0
-                            else:
-                                parent_parameters = dag.nodes[parent].data
-                                sim = parameter_utils.cos_sim_simple(current_parameters,parent_parameters)
-                                
-                                # Check if current node is malicious or corrupted and log detailed info
-                                current_node = dag.nodes[current]
-                                if current_node.malicious:
-                                    if logger:
-                                        logger.warning(f"MALICIOUS NODE {current}: similarity with parent {parent} = {sim:.4f}, sim_comp = {sim_comp:.4f}, difference = {abs(sim - sim_comp):.4f}, outlier_threshold = {self.outlier_detection:.4f}")
-                                elif current_node.corrupted:
-                                    if logger:
-                                        logger.warning(f"CORRUPTED NODE {current}: similarity with parent {parent} = {sim:.4f}, sim_comp = {sim_comp:.4f}, difference = {abs(sim - sim_comp):.4f}, outlier_threshold = {self.outlier_detection:.4f}")
-                                
-                                if logger and debug == 1:  
-                                    logger.debug(f"Comparing node {current} with parent {parent}: similarity = {sim:.4f}, sim_comp = {sim_comp:.4f}, diff with sim_comp = {abs(sim - sim_comp):.4f} and outlier detection threshold = {self.outlier_detection:.4f}")
-                                if not np.isnan(sim) and abs(sim - sim_comp) > self.outlier_detection:
-                                    if debug == 1 and logger:
-                                        logger.debug(f"Node {node_id} excluded due to similarity difference ({abs(sim - sim_comp):.4f}) between node {current} and its parent {parent} exceeding threshold")
-                                    should_remove_node = True
-                                    break
+        if self.max_depth > 0:
+            for node_id in selected_nodes:
+                visited = set()
+                queue = [(node_id, 1)]
+                should_remove_node = False
+                if dag.nodes[node_id].peer.name != "CentralNode":
+                    while queue and not should_remove_node:
+                        current, depth = queue.pop(0)
+                        if current in visited or depth > self.max_depth:
+                            continue
+                        visited.add(current)
+                        current_parameters = dag.nodes[current].data
+                        # Get parent nodes of current node
+                        parent_nodes = list(dag.graph.successors(current))
+                        if len(parent_nodes) == 0:
+                            logger.error(f"Node {current} has no parents, skipping similarity check")
+                        if logger and debug == 1:
+                            logger.debug(f"NAME: {dag.nodes[current].peer.name}")
+                        if dag.nodes[current].peer.name != "CentralNode":
+                            # Compare current node's parameters with each parent's parameters
+                            for parent in parent_nodes:
+                                if(dag.nodes[parent].peer.name == "CentralNode"):
+                                    # Skip the central node, as it is not a peer and does not have parameters
+                                    sim=1.0
+                                else:
+                                    parent_parameters = dag.nodes[parent].data
+                                    sim = parameter_utils.cos_sim_simple(current_parameters,parent_parameters)
+                                    
+                                    # Check if current node is malicious or corrupted and log detailed info
+                                    current_node = dag.nodes[current]
+                                    if current_node.malicious:
+                                        if logger:
+                                            logger.warning(f"MALICIOUS NODE {current}: similarity with parent {parent} = {sim:.4f}, sim_comp = {sim_comp:.4f}, difference = {abs(sim - sim_comp):.4f}, outlier_threshold = {self.outlier_detection:.4f}")
+                                    elif current_node.corrupted:
+                                        if logger:
+                                            logger.warning(f"CORRUPTED NODE {current}: similarity with parent {parent} = {sim:.4f}, sim_comp = {sim_comp:.4f}, difference = {abs(sim - sim_comp):.4f}, outlier_threshold = {self.outlier_detection:.4f}")
+                                    
+                                    if logger and debug == 1:  
+                                        logger.debug(f"Comparing node {current} with parent {parent}: similarity = {sim:.4f}, sim_comp = {sim_comp:.4f}, diff with sim_comp = {abs(sim - sim_comp):.4f} and outlier detection threshold = {self.outlier_detection:.4f}")
+                                    if not np.isnan(sim) and abs(sim - sim_comp) > self.outlier_detection:
+                                        if debug == 1 and logger:
+                                            logger.debug(f"Node {node_id} excluded due to similarity difference ({abs(sim - sim_comp):.4f}) between node {current} and its parent {parent} exceeding threshold")
+                                        should_remove_node = True
+                                        break
+                    
+                    # Continue traversing to parents for next iteration
+                    for parent in parent_nodes:
+                        queue.append((parent, depth + 1))
                 
-                # Continue traversing to parents for next iteration
-                for parent in parent_nodes:
-                    queue.append((parent, depth + 1))
-            
-            if should_remove_node:
-                nodes_to_remove.append(node_id)
+                if should_remove_node:
+                    nodes_to_remove.append(node_id)
         
         return nodes_to_remove
 
@@ -682,9 +683,8 @@ class TrustInformedTipSelector_NoThreshold(TipSelectionAlgorithm):
                     #Move to first in scored list
                     scored.remove((tip,score))
                     scored.insert(0, (tip,score))
-            # Lower threshold for corrupted nodes
             # Step 3: select the worst unconfirmed nodes
-            selected = [tip for tip, _ in scored if _ >= 0.0001][:2]
+            selected = [tip for tip, _ in scored[:2]]
         else:
             # Sort by descending score
             scored.sort(key=lambda x: x[1], reverse=True)
@@ -756,35 +756,33 @@ class TrustInformedTipSelector_NoThreshold(TipSelectionAlgorithm):
                     score = self.cs_evaluate_similarity(node, dag, new_parameters, logger)
                     if score is not None:
                         confirmed_scores.append((node, score))
-            if corrupted:
-                # If corrupted, prioritize malicious updates
-                for tip,score in confirmed_scores:
-                    if dag.nodes[tip].malicious:
-                        #Move to first in scored list
-                        confirmed_scores.remove((tip,score))
-                        confirmed_scores.insert(0, (tip,score))
-                selected += [node for node, _ in confirmed_scores[:2 - len(selected)]]
-            else:
-                # If not corrupted, we want to select the best confirmed nodes and check their past cone
-                new_selected = []    
-                confirmed_scores.sort(key=lambda x: x[1], reverse=True)
-                #if logger:
-                #    logger.info(f"Confirmed nodes: {confirmed_scores}")
-                repeat = True
-                while len(scored)> 2 and repeat:
-                    # Step 3: select the best unconfirmed nodes
-                    repeat = False
-                    new_selected = [node for node, _ in confirmed_scores[:2 - len(selected)]]
-                    # Step 4: Examine the past cone of the selected nodes
-                    # Check if any node in the past cone has low similarity with its parents
-                    nodes_to_remove = self.check_past_cone_similarity(new_selected, dag, logger=logger)
-                    # Remove nodes that failed the similarity check (with corrupted behavior)
-                    for node_id in nodes_to_remove:
-                        if node_id in new_selected:
-                            new_selected.remove(node_id)
-                            repeat = True
-                            # Remove the tuple (node_id, score) from confirmed_scores list
-                            confirmed_scores = [(tip, score) for tip, score in confirmed_scores if tip != node_id]
+            new_selected = []    
+            confirmed_scores.sort(key=lambda x: x[1], reverse=True)
+            #if logger:
+            #    logger.info(f"Confirmed nodes: {confirmed_scores}")
+            repeat = True
+            while len(scored)> 2 and repeat:
+                # Step 3: select the best unconfirmed nodes
+                repeat = False
+                new_selected = [node for node, _ in confirmed_scores[:2 - len(selected)]]
+                # Step 4: Examine the past cone of the selected nodes
+                # Check if any node in the past cone has low similarity with its parents
+                nodes_to_remove = self.check_past_cone_similarity(new_selected, dag, logger=logger)
+                # Remove nodes that failed the similarity check (with corrupted behavior)
+                for node_id in nodes_to_remove:
+                    if node_id in new_selected:
+                        new_selected.remove(node_id)
+                        repeat = True
+                        # Remove the tuple (node_id, score) from confirmed_scores list
+                        confirmed_scores = [(tip, score) for tip, score in confirmed_scores if tip != node_id]
+                if corrupted:
+                    # If corrupted, prioritize malicious updates
+                    for tip,score in confirmed_scores:
+                        if dag.nodes[tip].malicious:
+                            #Move to first in scored list
+                            confirmed_scores.remove((tip,score))
+                            confirmed_scores.insert(0, (tip,score))
+                    selected += [node for node, _ in confirmed_scores[:2 - len(selected)]]
                 if logger:
                     logger.info(f"New selected: {new_selected}")
                 else:

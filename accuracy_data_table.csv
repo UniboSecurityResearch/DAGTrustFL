@@ -1,0 +1,12 @@
+malicious_percentage,corrupted_percentage,total_threat_percentage,final_model_accuracy,is_baseline,experiment_type
+0,0,0,91.69,True,Baseline
+10,0,10,91.23,False,Threat Scenario
+10,10,20,90.81,False,Threat Scenario
+20,0,20,90.99,False,Threat Scenario
+10,20,30,91.06,False,Threat Scenario
+20,10,30,90.98,False,Threat Scenario
+30,0,30,90.99,False,Threat Scenario
+10,30,40,90.84,False,Threat Scenario
+20,20,40,90.59,False,Threat Scenario
+30,10,40,89.87,False,Threat Scenario
+40,0,40,90.14,False,Threat Scenario

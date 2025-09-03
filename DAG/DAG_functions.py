@@ -18,11 +18,11 @@ import os
 # Simulation of a DAG with K peers, each one makes Y nodes
 K= 10  # Number of peers
 R= 100  # Number of FL rounds
-malicious_percentage = 0.2  # Percentage of malicious peers - m%
-corrupted_percentage = 0.1  # Percentage of corrupted peers
+malicious_percentage = 0.3  # Percentage of malicious peers - m%
+corrupted_percentage = 0.0  # Percentage of corrupted peers - c%
 upsilon_1 = 0.4  # Weight for structural consistency
 upsilon_2 = 0.6  # Weight for updates contributions
-lambda_ = 0.5  # Weight for influence of historical trust evaluations
+lambda_ = 0.2  # Weight for influence of historical trust evaluations
 
 trust_vector = [1] * K
 structural_consistencies = []
@@ -190,6 +190,8 @@ def init_DAG(initial_params, logger):
     # Initialize DAG and tip selector
     dag = DAG.DAG()
     selector = TipSelectionAlgorithm.TrustInformedTipSelector_NoThreshold(
+        chi=2,
+        varsigma=0.025,
         similarity_method='cosine',
     )
     # Create K peers
@@ -198,16 +200,29 @@ def init_DAG(initial_params, logger):
 
     # Randomly select malicious peers based on percentage
     num_malicious = int(K * malicious_percentage)
-    malicious_indices = np.random.choice(K, num_malicious, replace=False)
+    #malicious_indices = np.random.choice(K, num_malicious, replace=False)
+    malicious_indices = [i for i in range(2, num_malicious+2)]
     for idx in malicious_indices:
         peers[idx].malicious = True
 
-    # Randomly select corrupted peers based on percentage
+    # Randomly select corrupted peers based on percentage from indices higher than malicious ones
     num_corrupted = int(K * corrupted_percentage)
-    corrupted_indices = np.random.choice([i for i in range(K) if i not in malicious_indices], num_corrupted, replace=False)
+    # Find the highest malicious index
+    max_malicious_idx = max(malicious_indices) if malicious_indices else -1
+    # Create pool of available indices higher than malicious indices
+    available_indices = [i for i in range(max_malicious_idx + 1, K)]
+    
+    if len(available_indices) >= num_corrupted:
+        corrupted_indices = np.random.choice(available_indices, num_corrupted, replace=False).tolist()
+    else:
+        # If not enough higher indices, use all available ones
+        corrupted_indices = available_indices
+        if logger:
+            logger.warning(f"Only {len(available_indices)} indices available for corrupted peers, requested {num_corrupted}")
+    
     for idx in corrupted_indices:
         peers[idx].corrupted = True
-
+    logger.info(f"Corrupted peers: {corrupted_indices} | Malicious peers: {malicious_indices}")
     # Genesis node - use the first client's parameters as template for structure
     if initial_params and len(initial_params) > 0:
         # Get the first client's parameters as a template and create a neutral version
@@ -237,7 +252,7 @@ def init_DAG(initial_params, logger):
     # Initialize CSV logging
     init_csv_logging(logger=logger)
     
-    return K,R,num_malicious,malicious_indices.tolist()
+    return K,R,num_malicious,malicious_indices
 
 
 def get_trust_vector(parameters_clients, epoch, logger):
@@ -363,7 +378,7 @@ def get_trust_vector(parameters_clients, epoch, logger):
                     logger.info(f"Peer {i} : No node found in the graph for this FL round")
                     if i in parameters_clients.keys():
                         logger.error(f"Peer {i} : No node found in the graph for this FL round, but parameters were provided")
-                # The peer didn't participate in this round, so we assume update contributions is 0.5
+                # The peer didn't participate in this round, so we assume update contributions is the historic value
                 updates_contribution = trust_vector[i] if i < len(trust_vector) else 0.5
         
         # Ensure vectors are properly sized

@@ -35,7 +35,7 @@ class DAG:
             descendants = nx.descendants(self.graph.reverse(copy=False), node_id)
             self.nodes[node_id].cw += len(descendants) 
     
-    def is_confirmed(self, node_id, Theta=3):
+    def is_confirmed(self, node_id, Theta=4):
         return self.nodes[node_id].cw > Theta
 
 

@@ -729,9 +729,9 @@ def main():
     print("=" * 50)
     
     # Ask for CSV file
-    csv_file = input("📁 CSV file name (default: dag_trust_analysis.csv): ").strip()
-    if not csv_file:
-        csv_file = "dag_trust_analysis.csv"
+    #csv_file = input("📁 CSV file name (default: dag_trust_analysis.csv): ").strip()
+    #if not csv_file:
+    csv_file = "dag_trust_analysis.csv"
     
     # Create the analyzer
     analyzer = DAGAnalyzer(csv_file)

@@ -148,8 +148,8 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     for client_idx in random_workers:
         if(update_contributions[client_idx] != 0):
             ordered_parameters.append(clients[client_idx].get_nn_parameters())
-            # Extract trust value for this specific client from the full trust_vector
             ordered_trust_values.append(trust_vector[client_idx])
+            #ordered_trust_values.append(1.0) Experiment without the trust component
         else:
             args.get_logger().info(f"Client {client_idx} has no updates contribution, skipping.")
 
