@@ -3,6 +3,7 @@ import numpy as np
 import psutil
 import gc
 import os
+import time
 import torch
 from federated_learning.arguments import Arguments
 from federated_learning.utils import generate_data_loaders_from_distributed_dataset
@@ -31,6 +32,12 @@ from parameter_utils import cos_sim_simple
 from parameter_utils import flatten_parameters
 r_filez = []
 w_filez = []
+
+# Global timing tracking variables
+ml_training_times = []
+dag_operation_times = []
+round_start_times = []
+total_experiment_start_time = None
 
 
 def check_memory():
@@ -107,6 +114,12 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     :param poisoned_workers: indices of poisoned workers
     :type poisoned_workers: list(int)
     """
+    global ml_training_times, dag_operation_times, round_start_times
+    
+    # Start timing for this round
+    round_start = time.time()
+    round_start_times.append(round_start)
+    
     # Memory check at start of round
     #logger.info(f"=== ROUND {epoch} START - Memory Check ===")
     #check_memory()
@@ -121,9 +134,19 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     logger.info("Selected workers for epoch #{}: {}", str(epoch), str(random_workers))
     global_model = clients[0].get_nn_parameters()
 
+    # === ML TRAINING PHASE - START TIMING ===
+    ml_training_start = time.time()
+    
     for client_idx in random_workers:
         args.get_logger().info("Training epoch #{} on client #{}", str(epoch), str(clients[client_idx].get_client_index()))
         clients[client_idx].train(epoch)
+    
+    # === ML TRAINING PHASE - END TIMING ===
+    ml_training_end = time.time()
+    ml_training_time = ml_training_end - ml_training_start
+    ml_training_times.append(ml_training_time)
+    
+    logger.info(f"🤖 ML Training time for round {epoch}: {ml_training_time:.3f} seconds")
     
     # Memory check after training
     #logger.info(f"=== ROUND {epoch} AFTER TRAINING - Memory Check ===")
@@ -136,7 +159,17 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     args.get_logger().info("Averaging client parameters")
     parameters = [clients[client_idx].get_nn_parameters() for client_idx in random_workers]
     
+    # === DAG OPERATIONS PHASE - START TIMING ===
+    dag_operations_start = time.time()
+    
     trust_vector, update_contributions = get_trust_vector(parameters_clients, epoch, logger=logger)
+    
+    # === DAG OPERATIONS PHASE - END TIMING ===
+    dag_operations_end = time.time()
+    dag_operations_time = dag_operations_end - dag_operations_start
+    dag_operation_times.append(dag_operations_time)
+    
+    logger.info(f"🔗 DAG Operations time for round {epoch}: {dag_operations_time:.3f} seconds")
     
     # Memory check after DAG operations
     #logger.info(f"=== ROUND {epoch} AFTER DAG OPERATIONS - Memory Check ===")
@@ -214,6 +247,16 @@ def run_machine_learning(clients, args, poisoned_workers):
     """
     Complete machine learning over a series of clients.
     """
+    global total_experiment_start_time, ml_training_times, dag_operation_times, round_start_times
+    
+    # Initialize timing tracking
+    total_experiment_start_time = time.time()
+    ml_training_times = []
+    dag_operation_times = []
+    round_start_times = []
+    
+    logger.info("🕐 Starting timing tracking for DAGTrustFL experiment")
+    
     # Delete existing result files if they exist
     if r_filez and os.path.exists(r_filez[0]):
         os.remove(r_filez[0])
@@ -250,6 +293,15 @@ def run_machine_learning(clients, args, poisoned_workers):
     if initial_memory and final_memory:
         total_increase = final_memory['memory_mb'] - initial_memory['memory_mb']
         logger.info(f"Total memory increase during experiment: {total_increase:+.2f} MB")
+
+    # Print timing report and save timing statistics
+    print_timing_report()
+    
+    # Generate experiment name for timing files
+    experiment_name = f"dagtrust_experiment_{int(time.time())}"
+    save_timing_statistics(experiment_name, args.get_num_epochs())
+    
+    logger.info("✅ Experiment completed with timing tracking")
 
     return convert_results_to_csv(epoch_test_set_results), worker_selection
 
@@ -296,6 +348,118 @@ def run_exp(replacement_method, client_selection_strategy, idx):
 
     # Now update the configuration with actual values from DAG
     KWARGS["NUM_WORKERS_PER_ROUND"] = K
+
+
+def save_timing_statistics(experiment_name, epoch):
+    """
+    Save timing statistics to CSV files for analysis.
+    
+    :param experiment_name: name of the experiment
+    :type experiment_name: str
+    :param epoch: final epoch number
+    :type epoch: int
+    """
+    global ml_training_times, dag_operation_times, round_start_times, total_experiment_start_time
+    
+    import pandas as pd
+    import os
+    
+    # Create timing data directory
+    timing_dir = "timing_results"
+    os.makedirs(timing_dir, exist_ok=True)
+    
+    # Calculate total experiment time
+    total_experiment_time = time.time() - total_experiment_start_time if total_experiment_start_time else 0
+    
+    # Create timing summary
+    timing_data = {
+        'round': list(range(1, len(ml_training_times) + 1)),
+        'ml_training_time': ml_training_times,
+        'dag_operations_time': dag_operation_times,
+        'total_round_time': [ml + dag for ml, dag in zip(ml_training_times, dag_operation_times)]
+    }
+    
+    timing_df = pd.DataFrame(timing_data)
+    
+    # Save detailed timing data
+    timing_file = os.path.join(timing_dir, f"{experiment_name}_timing_details.csv")
+    timing_df.to_csv(timing_file, index=False)
+    
+    # Calculate and save summary statistics
+    summary_stats = {
+        'metric': [
+            'total_experiment_time',
+            'avg_ml_training_time_per_round',
+            'avg_dag_operations_time_per_round', 
+            'avg_total_round_time',
+            'total_ml_training_time',
+            'total_dag_operations_time',
+            'ml_training_percentage',
+            'dag_operations_percentage',
+            'rounds_completed'
+        ],
+        'value': [
+            total_experiment_time,
+            np.mean(ml_training_times),
+            np.mean(dag_operation_times),
+            np.mean(timing_df['total_round_time']),
+            np.sum(ml_training_times),
+            np.sum(dag_operation_times),
+            (np.sum(ml_training_times) / total_experiment_time * 100) if total_experiment_time > 0 else 0,
+            (np.sum(dag_operation_times) / total_experiment_time * 100) if total_experiment_time > 0 else 0,
+            len(ml_training_times)
+        ]
+    }
+    
+    summary_df = pd.DataFrame(summary_stats)
+    summary_file = os.path.join(timing_dir, f"{experiment_name}_timing_summary.csv")
+    summary_df.to_csv(summary_file, index=False)
+    
+    logger.info(f"💾 Timing statistics saved:")
+    logger.info(f"   Detailed: {timing_file}")
+    logger.info(f"   Summary: {summary_file}")
+    
+    return timing_file, summary_file
+
+
+def print_timing_report():
+    """
+    Print a comprehensive timing report to console.
+    """
+    global ml_training_times, dag_operation_times, total_experiment_start_time
+    
+    if not ml_training_times or not dag_operation_times:
+        logger.warning("No timing data available for report")
+        return
+    
+    total_experiment_time = time.time() - total_experiment_start_time if total_experiment_start_time else 0
+    total_ml_time = np.sum(ml_training_times)
+    total_dag_time = np.sum(dag_operation_times)
+    total_federated_time = total_ml_time + total_dag_time
+    
+    logger.info("\n" + "="*80)
+    logger.info("📊 TIMING PERFORMANCE REPORT")
+    logger.info("="*80)
+    logger.info(f"🕐 Total Experiment Time: {total_experiment_time:.2f} seconds ({total_experiment_time/60:.2f} minutes)")
+    logger.info(f"🔄 Rounds Completed: {len(ml_training_times)}")
+    logger.info("")
+    logger.info(f"🤖 ML Training:")
+    logger.info(f"   Total Time: {total_ml_time:.2f} seconds ({total_ml_time/60:.2f} minutes)")
+    logger.info(f"   Average per Round: {np.mean(ml_training_times):.3f} seconds")
+    logger.info(f"   Min/Max per Round: {np.min(ml_training_times):.3f} / {np.max(ml_training_times):.3f} seconds")
+    logger.info(f"   Percentage of Total: {(total_ml_time/total_experiment_time*100):.1f}%")
+    logger.info("")
+    logger.info(f"🔗 DAG Operations:")
+    logger.info(f"   Total Time: {total_dag_time:.2f} seconds ({total_dag_time/60:.2f} minutes)")
+    logger.info(f"   Average per Round: {np.mean(dag_operation_times):.3f} seconds")
+    logger.info(f"   Min/Max per Round: {np.min(dag_operation_times):.3f} / {np.max(dag_operation_times):.3f} seconds")
+    logger.info(f"   Percentage of Total: {(total_dag_time/total_experiment_time*100):.1f}%")
+    logger.info("")
+    logger.info(f"⚡ Performance Metrics:")
+    logger.info(f"   Federated Learning Time: {total_federated_time:.2f} seconds ({(total_federated_time/total_experiment_time*100):.1f}% of total)")
+    logger.info(f"   Overhead Time: {(total_experiment_time-total_federated_time):.2f} seconds ({((total_experiment_time-total_federated_time)/total_experiment_time*100):.1f}% of total)")
+    logger.info(f"   ML/DAG Time Ratio: {(total_ml_time/total_dag_time):.2f}:1")
+    logger.info("="*80)
 
     args = Arguments(logger)
     args.set_model_save_path(models_folders[0])
