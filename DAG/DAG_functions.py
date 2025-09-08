@@ -18,7 +18,7 @@ import os
 # Simulation of a DAG with K peers, each one makes Y nodes
 K= 10  # Number of peers
 R= 100  # Number of FL rounds
-malicious_percentage = 0.3  # Percentage of malicious peers - m%
+malicious_percentage = 0.4  # Percentage of malicious peers - m%
 corrupted_percentage = 0.0  # Percentage of corrupted peers - c%
 upsilon_1 = 0.4  # Weight for structural consistency
 upsilon_2 = 0.6  # Weight for updates contributions

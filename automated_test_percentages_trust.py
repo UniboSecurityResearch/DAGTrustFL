@@ -160,8 +160,8 @@ def generate_combinations():
     combinations = []
     
     # Possible percentages
-    malicious_options = [30]
-    corrupted_options = [0]
+    malicious_options = [30,40]
+    corrupted_options = [0,10]
     
     for mal in malicious_options:
         for cor in corrupted_options:

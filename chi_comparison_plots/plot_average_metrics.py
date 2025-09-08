@@ -134,7 +134,7 @@ def create_average_metrics_plot(avg_df):
     """Create the combined plot with averaged metrics."""
     
     # Set up the plot with wider dimensions
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(8, 6))
     
     # Define colors
     colors = {

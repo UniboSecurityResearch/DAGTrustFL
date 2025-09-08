@@ -1,0 +1,21 @@
+Scenario,Method,FPR,FNR,DACC
+10%M 0%C,Without Trust,3.5,7.6,96.0
+20%M 0%C,Without Trust,0.2,1.12,99.7
+30%M 0%C,Without Trust,53.9,28.6,53.7
+40%M 0%C,Without Trust,63.7,4.7,60.0
+10%M 0%C,With Trust,1.6,7.0,97.9
+20%M 0%C,With Trust,0.02,1.11,99.15
+30%M 0%C,With Trust,17.7,13.8,81.7
+40%M 0%C,With Trust,39.0,3.9,75.1
+10%M 10%C,Without Trust,2.9,5.6,95.4
+10%M 20%C,Without Trust,3.5,2.2,95.8
+10%M 30%C,Without Trust,8.6,18.9,85.6
+20%M 10%C,Without Trust,0.2,0.5,99.7
+20%M 20%C,Without Trust,6.3,2.7,95.3
+30%M 10%C,Without Trust,19.2,34.0,74.8
+10%M 10%C,With Trust,0.1,8.2,96.3
+10%M 20%C,With Trust,4.6,11.1,91.4
+10%M 30%C,With Trust,2.4,3.3,95.3
+20%M 10%C,With Trust,6.4,1.7,95.0
+20%M 20%C,With Trust,5.0,7.7,94.0
+30%M 10%C,With Trust,33.4,6.1,77.7
