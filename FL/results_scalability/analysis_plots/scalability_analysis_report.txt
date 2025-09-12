@@ -1,0 +1,58 @@
+DAGTrustFL Scalability Analysis Report
+==================================================
+
+1. TIMING ANALYSIS
+--------------------
+Tested K values: [20, 40, 60, 80, 100, 200]
+
+Timing Results (Average per Round):
+K	ML Time (s)	DAG Time (s)	Total Time (s)	DAG/ML Ratio	ML %	DAG %
+--------------------------------------------------------------------------------
+20	11.5		3.9		15.4		0.335		69.4%	23.3%
+40	10.3		8.6		18.9		0.831		51.1%	42.4%
+60	12.2		12.3		24.5		1.004		47.3%	47.5%
+80	10.5		30.6		41.1		2.909		24.7%	71.8%
+100	10.5		41.5		52.0		3.961		19.5%	77.2%
+200	10.4		29.4		39.8		2.833		25.5%	72.3%
+
+2. PERFORMANCE ANALYSIS
+-------------------------
+Trust Detection Performance:
+K	Malicious Detected	Corrupted Detected	False Positives
+20	17		34		99
+40	71		67		789
+60	80		66		1823
+80	259		206		1534
+100	303		192		2298
+200	0		0		7943
+
+FL Accuracy Performance:
+K	Final Accuracy
+
+3. SCALABILITY INSIGHTS
+-------------------------
+K scaling factor: 10.0x (from 20 to 200)
+ML time scaling: 0.9x
+DAG time scaling: 7.6x
+ML efficiency: 11.08 (closer to 1.0 = better linear scaling)
+DAG efficiency: 1.31 (closer to 1.0 = better linear scaling)
+ML training shows better than linear scaling (good parallelization)
+DAG operations show better than linear scaling
+
+4. DETAILED SCALING ANALYSIS
+------------------------------
+DAG linearity ratio: 0.763 (1.0 = perfect linear)
+ML linearity ratio: 0.090 (1.0 = perfect linear)
+
+5. BLOCKCHAIN COMPARISON (THEORETICAL)
+----------------------------------------
+Blockchain theoretical scaling: 34.30x
+Blockchain linearity ratio: 3.430
+DAG performance advantage at K=200: 13.42x faster than blockchain
+
+Scaling Classification:
+DAG: Sublinear scaling (excellent)
+Blockchain: Poor scaling (quadratic or worse)
+ML: Sublinear scaling (excellent)
+
+Report generated on: 2025-09-12 14:36:37.538482

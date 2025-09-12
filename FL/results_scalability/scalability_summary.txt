@@ -1,0 +1,18 @@
+DAGTrustFL Scalability Test Summary
+==================================================
+
+Test completed on: 2025-09-12 14:04:38
+Total experiments: 1
+
+Results by K value:
+------------------------------
+K = 200:   68.0 minutes
+
+Data collected for each experiment:
+- DAG trust analysis (dag_trust_analysis.csv)
+- FL results (3000_results.csv, 3000_workers_selected.csv)
+- Performance timing data (timing_results/)
+- Analysis plots (dag_analysis_plots/)
+- Cosine similarity analysis
+
+Total experimental time: 68.0 minutes (1.1 hours)

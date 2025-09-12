@@ -343,11 +343,43 @@ def run_exp(replacement_method, client_selection_strategy, idx):
         initial_parameters[client.get_client_index()] = client.get_nn_parameters()
     
     #GIACOMO: Initialize DAG with initial client parameters
-    X, R, num_malicious, malicious_indices = init_DAG(initial_parameters, logger=logger)
-    K=X-1
+    K, R, num_malicious, malicious_indices = init_DAG(initial_parameters, logger=logger)
+    N = int(K/2)
 
     # Now update the configuration with actual values from DAG
-    KWARGS["NUM_WORKERS_PER_ROUND"] = K
+    KWARGS["NUM_WORKERS_PER_ROUND"] = N
+
+    args = Arguments(logger)
+    args.set_model_save_path(models_folders[0])
+    args.set_num_poisoned_workers(num_malicious)
+    args.set_num_workers(K)
+    args.set_num_epochs(R)
+    args.set_round_worker_selection_strategy_kwargs(KWARGS)
+    args.set_client_selection_strategy(client_selection_strategy)
+    args.log()
+
+    # Redistribute data with correct number of workers
+    distributed_train_dataset = distribute_batches_equally(train_data_loader, args.get_num_workers())
+    distributed_train_dataset = convert_distributed_data_into_numpy(distributed_train_dataset)
+
+    poisoned_workers = malicious_indices
+    #poisoned_workers = identify_random_elements(args.get_num_workers(), args.get_num_poisoned_workers())
+    logger.info(f"Poisoned workers: {str(poisoned_workers)}")
+    if torch.cuda.is_available():
+        logger.info(f"CUDA is available, using GPU for training: {torch.cuda.get_device_name(0)}")
+    else:
+        logger.error("CUDA is not available, using CPU for training.")
+    distributed_train_dataset = poison_data(logger, distributed_train_dataset, args.get_num_workers(), poisoned_workers, replacement_method)
+
+    train_data_loaders = generate_data_loaders_from_distributed_dataset(distributed_train_dataset, args.get_batch_size())
+
+    clients = create_clients(args, train_data_loaders, test_data_loader)
+
+    results, worker_selection = run_machine_learning(clients, args, poisoned_workers)
+    #save_results(results, results_files[0])
+    #save_results(worker_selection, worker_selections_files[0])
+
+    logger.remove(handler)
 
 
 def save_timing_statistics(experiment_name, epoch):
@@ -461,34 +493,4 @@ def print_timing_report():
     logger.info(f"   ML/DAG Time Ratio: {(total_ml_time/total_dag_time):.2f}:1")
     logger.info("="*80)
 
-    args = Arguments(logger)
-    args.set_model_save_path(models_folders[0])
-    args.set_num_poisoned_workers(num_malicious)
-    args.set_num_workers(X)
-    args.set_num_epochs(R)
-    args.set_round_worker_selection_strategy_kwargs(KWARGS)
-    args.set_client_selection_strategy(client_selection_strategy)
-    args.log()
-
-    # Redistribute data with correct number of workers
-    distributed_train_dataset = distribute_batches_equally(train_data_loader, args.get_num_workers())
-    distributed_train_dataset = convert_distributed_data_into_numpy(distributed_train_dataset)
-
-    poisoned_workers = malicious_indices
-    #poisoned_workers = identify_random_elements(args.get_num_workers(), args.get_num_poisoned_workers())
-    logger.info(f"Poisoned workers: {str(poisoned_workers)}")
-    if torch.cuda.is_available():
-        logger.info(f"CUDA is available, using GPU for training: {torch.cuda.get_device_name(0)}")
-    else:
-        logger.error("CUDA is not available, using CPU for training.")
-    distributed_train_dataset = poison_data(logger, distributed_train_dataset, args.get_num_workers(), poisoned_workers, replacement_method)
-
-    train_data_loaders = generate_data_loaders_from_distributed_dataset(distributed_train_dataset, args.get_batch_size())
-
-    clients = create_clients(args, train_data_loaders, test_data_loader)
-
-    results, worker_selection = run_machine_learning(clients, args, poisoned_workers)
-    #save_results(results, results_files[0])
-    #save_results(worker_selection, worker_selections_files[0])
-
-    logger.remove(handler)
+    

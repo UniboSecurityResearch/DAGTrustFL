@@ -16,13 +16,13 @@ import os
 
 #matplotlib.use('Qt5Agg')
 # Simulation of a DAG with K peers, each one makes Y nodes
-K= 10  # Number of peers
+K= 200  # Number of peers
 R= 100  # Number of FL rounds
-malicious_percentage = 0.4  # Percentage of malicious peers - m%
-corrupted_percentage = 0.0  # Percentage of corrupted peers - c%
+malicious_percentage = 0.1  # Percentage of malicious peers - m%
+corrupted_percentage = 0.1  # Percentage of corrupted peers - c%
 upsilon_1 = 0.4  # Weight for structural consistency
 upsilon_2 = 0.6  # Weight for updates contributions
-lambda_ = 0.2  # Weight for influence of historical trust evaluations
+lambda_ = 0.1  # Weight for influence of historical trust evaluations
 
 trust_vector = [1] * K
 structural_consistencies = []
