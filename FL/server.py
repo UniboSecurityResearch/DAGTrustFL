@@ -38,6 +38,7 @@ ml_training_times = []
 dag_operation_times = []
 round_start_times = []
 total_experiment_start_time = None
+client_training_times = []  # List to store individual client training times
 
 
 def check_memory():
@@ -114,7 +115,7 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     :param poisoned_workers: indices of poisoned workers
     :type poisoned_workers: list(int)
     """
-    global ml_training_times, dag_operation_times, round_start_times
+    global ml_training_times, dag_operation_times, round_start_times, client_training_times
     
     # Start timing for this round
     round_start = time.time()
@@ -139,7 +140,21 @@ def train_subset_of_clients(epoch, args, clients, poisoned_workers):
     
     for client_idx in random_workers:
         args.get_logger().info("Training epoch #{} on client #{}", str(epoch), str(clients[client_idx].get_client_index()))
+        
+        # Time individual client training
+        client_train_start = time.time()
         clients[client_idx].train(epoch)
+        client_train_end = time.time()
+        client_train_time = client_train_end - client_train_start
+        
+        # Save individual client training time to list
+        client_training_times.append({
+            'round': epoch,
+            'client_id': client_idx,
+            'training_time': client_train_time
+        })
+        
+        logger.info(f"🎯 Client {client_idx} training time: {client_train_time:.3f} seconds")
     
     # === ML TRAINING PHASE - END TIMING ===
     ml_training_end = time.time()
@@ -247,13 +262,14 @@ def run_machine_learning(clients, args, poisoned_workers):
     """
     Complete machine learning over a series of clients.
     """
-    global total_experiment_start_time, ml_training_times, dag_operation_times, round_start_times
+    global total_experiment_start_time, ml_training_times, dag_operation_times, round_start_times, client_training_times
     
     # Initialize timing tracking
     total_experiment_start_time = time.time()
     ml_training_times = []
     dag_operation_times = []
     round_start_times = []
+    client_training_times = []
     
     logger.info("🕐 Starting timing tracking for DAGTrustFL experiment")
     
@@ -300,6 +316,7 @@ def run_machine_learning(clients, args, poisoned_workers):
     # Generate experiment name for timing files
     experiment_name = f"dagtrust_experiment_{int(time.time())}"
     save_timing_statistics(experiment_name, args.get_num_epochs())
+    save_client_timing_statistics(experiment_name)  # Save individual client timing data
     
     logger.info("✅ Experiment completed with timing tracking")
 
@@ -382,6 +399,61 @@ def run_exp(replacement_method, client_selection_strategy, idx):
     logger.remove(handler)
 
 
+def save_client_timing_statistics(experiment_name):
+    """
+    Save individual client training timing statistics to CSV files for analysis.
+    
+    :param experiment_name: name of the experiment
+    :type experiment_name: str
+    """
+    global client_training_times
+    
+    import pandas as pd
+    import os
+    
+    # Create timing data directory
+    timing_dir = "timing_results"
+    os.makedirs(timing_dir, exist_ok=True)
+    
+    if not client_training_times:
+        logger.warning("No client training timing data available to save")
+        return
+    
+    # Convert list of dictionaries to DataFrame
+    client_timing_df = pd.DataFrame(client_training_times)
+    
+    # Save detailed client timing data
+    client_timing_file = os.path.join(timing_dir, f"{experiment_name}_client_timing_details.csv")
+    client_timing_df.to_csv(client_timing_file, index=False)
+    
+    # Calculate and save client timing summary statistics
+    client_summary_stats = []
+    
+    # Group by client to get per-client statistics
+    for client_id in client_timing_df['client_id'].unique():
+        client_data = client_timing_df[client_timing_df['client_id'] == client_id]
+        
+        client_summary_stats.append({
+            'client_id': client_id,
+            'total_training_time': client_data['training_time'].sum(),
+            'avg_training_time_per_round': client_data['training_time'].mean(),
+            'min_training_time': client_data['training_time'].min(),
+            'max_training_time': client_data['training_time'].max(),
+            'std_training_time': client_data['training_time'].std(),
+            'rounds_participated': len(client_data)
+        })
+    
+    client_summary_df = pd.DataFrame(client_summary_stats)
+    client_summary_file = os.path.join(timing_dir, f"{experiment_name}_client_timing_summary.csv")
+    client_summary_df.to_csv(client_summary_file, index=False)
+    
+    logger.info(f"💾 Client timing statistics saved:")
+    logger.info(f"   Detailed: {client_timing_file}")
+    logger.info(f"   Summary: {client_summary_file}")
+    
+    return client_timing_file, client_summary_file
+
+
 def save_timing_statistics(experiment_name, epoch):
     """
     Save timing statistics to CSV files for analysis.
@@ -391,7 +463,7 @@ def save_timing_statistics(experiment_name, epoch):
     :param epoch: final epoch number
     :type epoch: int
     """
-    global ml_training_times, dag_operation_times, round_start_times, total_experiment_start_time
+    global ml_training_times, dag_operation_times, round_start_times, total_experiment_start_time, client_training_times
     
     import pandas as pd
     import os

@@ -13,10 +13,11 @@ import dag_utils
 import gif
 import csv
 import os
+import time
 
 #matplotlib.use('Qt5Agg')
 # Simulation of a DAG with K peers, each one makes Y nodes
-K= 200  # Number of peers
+K= 10  # Number of peers
 R= 100  # Number of FL rounds
 malicious_percentage = 0.1  # Percentage of malicious peers - m%
 corrupted_percentage = 0.1  # Percentage of corrupted peers - c%
@@ -45,10 +46,65 @@ total_malicious_confirmed = 0 #The total refers to the total number from last pr
 total_corrupted_confirmed = 0 #The total refers to the total number from last pruning of the graph
 pos = None
 csv_filename = None  # CSV filename to save data
+timing_csv_filename = None  # CSV filename to save timing data
 checkpoint_malicious_conf = 0 #To be summed to total_malicious_confirmed to get the total number of malicious nodes confirmed
 checkpoint_corrupted_conf = 0 #To be summed to total_corrupted_confirmed to get the total number of corrupted nodes confirmed
 mean_sim_good = 0.4 #starting values
 mean_sim_bad = 0.2 #starting values
+
+
+def init_timing_csv_logging(filename="dag_add_node_timing.csv", logger=None):
+    """Initialize the CSV file to save add_node timing data."""
+    global timing_csv_filename
+    timing_csv_filename = filename
+    
+    # Create CSV header for timing data
+    headers = [
+        'Round', 'Peer_ID', 'Node_ID', 'Is_Malicious', 'Is_Corrupted', 
+        'Add_Node_Time_Seconds', 'Timestamp'
+    ]
+    
+    # Write header
+    with open(timing_csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(headers)
+    
+    if logger:
+        logger.info(f"Timing CSV logging initialized: {timing_csv_filename}")
+
+
+def save_add_node_timing(round_num, peer_id, node_id, is_malicious, is_corrupted, timing_seconds, logger=None):
+    """Save add_node timing data to CSV file."""
+    global timing_csv_filename
+    
+    if timing_csv_filename is None:
+        if logger:
+            logger.warning("Timing CSV logging not initialized. Call init_timing_csv_logging() first.")
+        return
+    
+    # Prepare timing data
+    row_data = [
+        round_num,
+        peer_id,
+        node_id[:8] if node_id else "N/A",  # Truncate node ID for readability
+        1 if is_malicious else 0,
+        1 if is_corrupted else 0,
+        timing_seconds,
+        time.time()  # Current timestamp
+    ]
+    
+    # Write data to CSV
+    try:
+        with open(timing_csv_filename, 'a', newline='', encoding='utf-8') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(row_data)
+        
+        if logger:
+            logger.debug(f"Timing data saved: Peer {peer_id}, Time: {timing_seconds:.6f}s")
+    except Exception as e:
+        if logger:
+            logger.error(f"Error saving timing data: {e}")
+
 
 def init_csv_logging(filename="dag_trust_analysis.csv", logger=None):
     """Initialize the CSV file to save round data."""
@@ -252,6 +308,9 @@ def init_DAG(initial_params, logger):
     # Initialize CSV logging
     init_csv_logging(logger=logger)
     
+    # Initialize timing CSV logging
+    init_timing_csv_logging(logger=logger)
+    
     return K,R,num_malicious,malicious_indices
 
 
@@ -284,7 +343,23 @@ def get_trust_vector(parameters_clients, epoch, logger):
             node.malicious = is_malicious
             node.corrupted = is_corrupted
             
+            # Measure timing for add_node operation
+            start_time = time.time()
             node_id = peer.add_node(node,logger=logger)
+            end_time = time.time()
+            add_node_time = end_time - start_time
+            
+            # Save timing data to CSV
+            save_add_node_timing(
+                round_num=epoch + 1,
+                peer_id=peer.id,
+                node_id=node_id,
+                is_malicious=is_malicious,
+                is_corrupted=is_corrupted,
+                timing_seconds=add_node_time,
+                logger=logger
+            )
+            
             added_node_ids.append(node_id)
             pos = nx.spring_layout(dag.graph, seed=42, pos=pos, fixed=list(pos.keys()))
             dag_utils.draw_dag(dag, step=step, pos=pos, highlight_nodes=longest_ppath)
