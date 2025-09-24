@@ -1,85 +1,116 @@
-# Data Poisoning Attacks Against Federated Learning Systems
+# DAGTrustFL - FL Component
 
-Code for the ESORICS 2020 paper: Data Poisoning Attacks Against Federated Learning Systems
+This directory contains the federated learning implementation of DAGTrustFL, a system that integrates Directed Acyclic Graph (DAG) structures with Federated Learning to enable trust evaluation and malicious participant detection.
 
 ## Installation
 
-1) Create a virtualenv (Python 3.7)
-2) Install dependencies inside of virtualenv (```pip install -r requirements.pip```)
-3) If you are planning on using the defense, you will need to install ```matplotlib```. This is not required for running experiments, and is not included in the requirements file
+1) Create a virtual environment (Python 3.7+)
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
 
-## Instructions for execution
+2) Install dependencies
+```bash
+pip install -r requirements.pip
+```
 
-Using this repository, you can replicate all results presented at ESORICS. We outline the steps required to execute different experiments below.
+3) For visualization and analysis features, matplotlib is required:
+```bash
+pip install matplotlib
+```
+
+## Quick Start
 
 ### Setup
 
-Before you can run any experiments, you must complete some setup:
+Before running experiments, complete the initial setup:
 
-1) ```python3 generate_data_distribution.py``` This downloads the datasets, as well as generates a static distribution of the training and test data to provide consistency in experiments.
-2) ```python3 generate_default_models.py``` This generates an instance of all of the models used in the paper, and saves them to disk.
+1) **Generate data distribution**:
+   ```bash
+   python3 generate_data_distribution.py
+   ```
+   This downloads datasets and generates static distribution for consistent experiments.
 
-### General Information
+2) **Generate default models**:
+   ```bash
+   python3 generate_default_models.py
+   ```
+   This creates instances of all models used in experiments.
 
-Some pointers & general information:
-- Most hyperparameters can be set in the ```federated_learning/arguments.py``` file
-- Most specific experiment settings are located in the respective experiment files (see the following sections)
+### Running the Main Experiment
 
-### Experiments - Label Flipping Attack Feasibility
+**Primary execution script**:
+```bash
+python3 label_flipping_attack.py
+```
 
-Running an attack: ```python3 label_flipping_attack.py```
+This script orchestrates a single complete DAGTrustFL experiment, as done in the paper.
 
-### Experiments - Attack Timing in Label Flipping Attacks
+## Experimental Components
 
-Running an attack: ```python3 attack_timing.py```
+### Core Experiments
 
-### Experiments - Malicious Participant Availability
+- **`label_flipping_attack.py`** - Main experiment script with DAG trust integration
 
-Running an attack: ```python3 malicious_participant_availability.py```
+### Analysis Scripts
 
-### Experiments - Defending Against Label Flipping Attacks
+- **`analyze_fl_csv_pdf.py`** - FL results analysis and PDF report generation
+- **`analyze_dag_csv_pdf.py`** - DAG trust analysis and visualization
 
-Running the defense: ```python3 defense.py```
+## Configuration
 
-### Experiment Hyperparameters
+### Hyperparameters
 
-Recommended default hyperparameters for CIFAR10 (using the provided CNN):
-- Batch size: 10
-- LR: 0.01
-- Number of epochs: 200
-- Momentum: 0.5
-- Scheduler step size: 50
-- Scheduler gamma: 0.5
-- Min_lr: 1e-10
+Main FL hyperparameters can be modified in:
+- **`federated_learning/arguments.py`** - General FL settings
+- **`server.py`** - Setting of K (participants per round, in function of N), malicious and corrupted indices.
 
-Recommended default hyperparameters for Fashion-MNIST (using the provided CNN):
+### Recommended Settings
+
+**Fashion-MNIST (CNN)**:
 - Batch size: 4
-- LR: 0.001
-- Number of epochs: 200
+- Learning rate: 0.001
+- Epochs: 100
 - Momentum: 0.9
 - Scheduler step size: 10
 - Scheduler gamma: 0.1
-- Min_lr: 1e-10
+- Min LR: 1e-10
 
-## Citing
+## Results and Output
 
-If you use this code, please cite the paper:
+### Generated Files
+
+The experiment generates several output files:
+- **`3000_results.csv`** - FL training metrics and results
+- **`3000_workers_selected.csv`** - Worker selection each round
+- **`dag_trust_analysis.csv`** - DAG trust vectors and participant scores
+
+## Directory Structure
 
 ```
-@ARTICLE{2020arXiv200708432T,
-       author = {{Tolpegin}, Vale and {Truex}, Stacey and {Emre Gursoy}, Mehmet and
-         {Liu}, Ling},
-        title = "{Data Poisoning Attacks Against Federated Learning Systems}",
-      journal = {arXiv e-prints},
-     keywords = {Computer Science - Machine Learning, Computer Science - Cryptography and Security, Statistics - Machine Learning},
-         year = 2020,
-        month = jul,
-          eid = {arXiv:2007.08432},
-        pages = {arXiv:2007.08432},
-archivePrefix = {arXiv},
-       eprint = {2007.08432},
- primaryClass = {cs.LG},
-       adsurl = {https://ui.adsabs.harvard.edu/abs/2020arXiv200708432T},
-      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
-}
+FL/
+├── federated_learning/          # Core FL implementation
+├── data_loaders/               # Dataset handling utilities
+├── data/                      # Training and test datasets
+├── default_models/            # Model templates
+├── results/                   # Experiment output files
+└── logs/                      # Execution logs
 ```
+
+## Advanced Usage
+
+### Scalability Testing
+
+For automated experiments across different parameters, use the ../automated_tests folder:
+```bash
+python3 ../automated_tests/automated_test_*.py*
+```
+
+### Custom Experiments
+
+Modify experiment parameters in the respective scripts or through command-line arguments. See individual script documentation for available options.
+
+## Integration with DAG Component
+
+This FL component works in conjunction with the DAG trust system located in `../DAG/`.

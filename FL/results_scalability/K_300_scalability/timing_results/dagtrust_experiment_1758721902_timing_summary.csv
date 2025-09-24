@@ -1,0 +1,10 @@
+metric,value
+total_experiment_time,7138.25146651268
+avg_ml_training_time_per_round,10.88821649312973
+avg_dag_operations_time_per_round,59.469940478801725
+avg_total_round_time,70.35815697193146
+total_ml_training_time,1088.821649312973
+total_dag_operations_time,5946.994047880173
+ml_training_percentage,15.253338361935093
+dag_operations_percentage,83.31163557040554
+rounds_completed,100.0

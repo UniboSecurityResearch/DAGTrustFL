@@ -17,7 +17,7 @@ import time
 
 #matplotlib.use('Qt5Agg')
 # Simulation of a DAG with K peers, each one makes Y nodes
-K= 10  # Number of peers
+K= 300  # Number of peers
 R= 100  # Number of FL rounds
 malicious_percentage = 0.1  # Percentage of malicious peers - m%
 corrupted_percentage = 0.1  # Percentage of corrupted peers - c%

@@ -222,7 +222,7 @@ def main():
     print("Results will be stored in results_scalability/ folder")
     
     # K values to test
-    k_values = [200]
+    k_values = [150, 300]
     
     print(f"\n{'#'*80}")
     print(f"SCALABILITY TESTING - {len(k_values)} experiments")
