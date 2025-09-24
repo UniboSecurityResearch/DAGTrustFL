@@ -93,7 +93,7 @@ def main():
 
     # Assi in inglese con font aumentati
     plt.xlabel("N (participants)", fontsize=24)
-    plt.ylabel("Time (ms)", fontsize=24)
+    plt.ylabel("Time (s)", fontsize=24)
     plt.xlim(0, 200)
     plt.ylim(1, 10**5)  # Y da 1 a 10^5
     plt.yscale('log')  # Asse Y logaritmico
