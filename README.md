@@ -7,7 +7,20 @@ A novel architecture that integrates Directed Acyclic Graph (DAG) structures wit
 DAGTrustFL combines the immutable and transparent properties of DAG-based systems with federated learning to create a trustworthy distributed training framework. The system automatically detects and mitigates malicious participants while maintaining privacy and decentralization principles.
 
 ## Article
-Please cite the article if you use this repository: @cite.....
+If you use this repository, please cite the following article:
+
+> G. Gori, H. Mora, F. J. Mora-Gimeno, and M. Prandini, "Scalable Trust Management in Federated Learning for IoT Using DAG Structures," *IEEE Communications Standards Magazine*, 2026, doi: [10.1109/MCOMSTD.2026.3744209](https://doi.org/10.1109/MCOMSTD.2026.3744209).
+
+```bibtex
+@article{gori2026scalable,
+  title={Scalable Trust Management in Federated Learning for {IoT} Using {DAG} Structures},
+  author={Gori, Giacomo and Mora, Higinio and Mora-Gimeno, Francisco J. and Prandini, Marco},
+  journal={IEEE Communications Standards Magazine},
+  year={2026},
+  publisher={IEEE},
+  doi={10.1109/MCOMSTD.2026.3744209}
+}
+```
 
 ## Repository Structure
 
